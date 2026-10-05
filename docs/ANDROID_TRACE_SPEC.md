@@ -554,6 +554,9 @@ The sequence state is re-derived from the stored records.
 **Not implemented in Phase B:** Layer 1 inference, the Layer 2 adapter, any model runtime,
 preload actions, K selection and prediction UI.
 
+**Phase C:** frozen Layer 1 inference with numerical parity to the checkpoint is in
+`docs/LAYER1_ANDROID_INFERENCE.md`. It is not yet connected to this trace.
+
 ---
 
 ## Appendix: vocabulary from the public-LSApp re-run (NON-AUTHORITATIVE)

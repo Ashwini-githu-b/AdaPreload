@@ -1,0 +1,311 @@
+{
+ "format": "adapreload-layer1-weights",
+ "format_version": 1,
+ "description": "Frozen AdaPreload Layer 1 backbone, exported byte-for-byte from the audited checkpoint by tools/export_layer1.py. Do not edit by hand.",
+ "source": {
+  "checkpoint": {
+   "file": "layer1_backbone_final.pt",
+   "sha256": "fd668f160363c9b32fe5ac561bec7b46ff5492d84e10f31d0bfd6d7a0c21c092",
+   "bytes": 331499
+  },
+  "notebook": {
+   "file": "Copy_of_adaPrealoaderneww.ipynb",
+   "sha256": "47540816a02d867a032865c903ab1a2489d06d0700c86dc216feb603867fc523"
+  },
+  "vocabulary_apps_sha256": "d0801f3b2e1ece7558989fa2fc70c86560aebb36a2e441f2ffa9b865a2147d78",
+  "exporter": "tools/export_layer1.py",
+  "torch_version": "2.14.1+cpu"
+ },
+ "architecture": {
+  "reference_class": "BackboneMorph (notebook nb[17] L11-53), inference path get_hidden (nb[22] L11-17) as used in nb[33] L135-158",
+  "morph_mode": "none",
+  "vocab_size": 88,
+  "padding_id": 0,
+  "window": 20,
+  "d_model": 64,
+  "num_layers": 2,
+  "num_heads": 4,
+  "head_dim": 16,
+  "dim_feedforward": 128,
+  "activation": "relu",
+  "norm_first": false,
+  "layer_norm_eps": 1e-05,
+  "final_encoder_norm": false,
+  "positions": "right-aligned: position ids arange(window - L, window) for L real tokens",
+  "readout": "encoder output at the last real token, then out: Linear(d_model, vocab_size)",
+  "probabilities": "softmax over logits with logit[padding_id] = -inf; probabilities[k] is app id k + 1"
+ },
+ "weights": {
+  "file": "layer1_weights.bin",
+  "dtype": "float32",
+  "byte_order": "little",
+  "bytes": 318304,
+  "sha256": "1676950a543242e8d62deab29cf757f50a9ad3eeb32fbb6a7d7dcdb43a17b99c",
+  "parameter_count": 79576
+ },
+ "tensors": [
+  {
+   "name": "app_emb.weight",
+   "shape": [
+    88,
+    64
+   ],
+   "offset": 0,
+   "count": 5632,
+   "sha256": "dc48dac8d4fcc28a05550ece6fe90c7cc8eaf03f75ffee697a665f77f9f3f0ba"
+  },
+  {
+   "name": "pos_emb.weight",
+   "shape": [
+    20,
+    64
+   ],
+   "offset": 22528,
+   "count": 1280,
+   "sha256": "7590a2730037284c578e5f81ef3232ec2e63e04d6ef7792e6bfe07ff2aca321a"
+  },
+  {
+   "name": "encoder.layers.0.self_attn.in_proj_weight",
+   "shape": [
+    192,
+    64
+   ],
+   "offset": 27648,
+   "count": 12288,
+   "sha256": "f7afe5f3a2563587efe1dfcb757791f36f791d5c44f3e1e6efc6d98d54f36161"
+  },
+  {
+   "name": "encoder.layers.0.self_attn.in_proj_bias",
+   "shape": [
+    192
+   ],
+   "offset": 76800,
+   "count": 192,
+   "sha256": "db6d5e25d2d73cf1f6fb4fe459bbd1ea508c59c421de5d8a424c0543f0e64f66"
+  },
+  {
+   "name": "encoder.layers.0.self_attn.out_proj.weight",
+   "shape": [
+    64,
+    64
+   ],
+   "offset": 77568,
+   "count": 4096,
+   "sha256": "0b74fa3aad4cf22b71ac6d3efbc764aa007823657967812fb102e81fa4bda81e"
+  },
+  {
+   "name": "encoder.layers.0.self_attn.out_proj.bias",
+   "shape": [
+    64
+   ],
+   "offset": 93952,
+   "count": 64,
+   "sha256": "5cc7aa5451b7fbb51dbe6a07c87fc2092a895042e832fc64e339109022289938"
+  },
+  {
+   "name": "encoder.layers.0.linear1.weight",
+   "shape": [
+    128,
+    64
+   ],
+   "offset": 94208,
+   "count": 8192,
+   "sha256": "050ef54e93a5ab12976c2c8b260e63d017b538048b188fc2bde5afc6cd6589d0"
+  },
+  {
+   "name": "encoder.layers.0.linear1.bias",
+   "shape": [
+    128
+   ],
+   "offset": 126976,
+   "count": 128,
+   "sha256": "c88d615257ddb35e72caae0624ceeade9954e53f67103c6ad95ec8124cf27927"
+  },
+  {
+   "name": "encoder.layers.0.linear2.weight",
+   "shape": [
+    64,
+    128
+   ],
+   "offset": 127488,
+   "count": 8192,
+   "sha256": "14ec459529f0b8a375461a40391978a2bcea4316e5be56453504c8fd0b2b59db"
+  },
+  {
+   "name": "encoder.layers.0.linear2.bias",
+   "shape": [
+    64
+   ],
+   "offset": 160256,
+   "count": 64,
+   "sha256": "2281681e18f07d1d5ec64dcad49214d33287c3b13bdb66435791e627c59c817e"
+  },
+  {
+   "name": "encoder.layers.0.norm1.weight",
+   "shape": [
+    64
+   ],
+   "offset": 160512,
+   "count": 64,
+   "sha256": "e6f29faeea112b5ed20e9dafec5ba89ee15256cb8839f8768d3d966a39d70398"
+  },
+  {
+   "name": "encoder.layers.0.norm1.bias",
+   "shape": [
+    64
+   ],
+   "offset": 160768,
+   "count": 64,
+   "sha256": "bcbfbe3102117d08833da6564bdedeb5bc9bb0209cd1e2401aef1064259df3d1"
+  },
+  {
+   "name": "encoder.layers.0.norm2.weight",
+   "shape": [
+    64
+   ],
+   "offset": 161024,
+   "count": 64,
+   "sha256": "259ae919b2a23213692098d4ba1a026b4ac4cf4270c4cb6a35cc0c897d7b099f"
+  },
+  {
+   "name": "encoder.layers.0.norm2.bias",
+   "shape": [
+    64
+   ],
+   "offset": 161280,
+   "count": 64,
+   "sha256": "dd6cbf1f564f0b6587f401115a94413276633c09540b73ee464e79f493bef5c2"
+  },
+  {
+   "name": "encoder.layers.1.self_attn.in_proj_weight",
+   "shape": [
+    192,
+    64
+   ],
+   "offset": 161536,
+   "count": 12288,
+   "sha256": "184346cdf1dafb096eab1720c5854f8962310b08fd1510192620aa6a096f6261"
+  },
+  {
+   "name": "encoder.layers.1.self_attn.in_proj_bias",
+   "shape": [
+    192
+   ],
+   "offset": 210688,
+   "count": 192,
+   "sha256": "edd447b654725f1d8a4831071a2e67e343c4c9bf3c6605f3253b463ec639d833"
+  },
+  {
+   "name": "encoder.layers.1.self_attn.out_proj.weight",
+   "shape": [
+    64,
+    64
+   ],
+   "offset": 211456,
+   "count": 4096,
+   "sha256": "96d6f5944885032393fd945c686ca8ed7c7514f536add9b6a98246e3119d61ae"
+  },
+  {
+   "name": "encoder.layers.1.self_attn.out_proj.bias",
+   "shape": [
+    64
+   ],
+   "offset": 227840,
+   "count": 64,
+   "sha256": "bb9239d38e1891c4b8a9e9334324901d4905d3fdc5ee1630d967cd102ed8ff61"
+  },
+  {
+   "name": "encoder.layers.1.linear1.weight",
+   "shape": [
+    128,
+    64
+   ],
+   "offset": 228096,
+   "count": 8192,
+   "sha256": "71f46cb548c763e639fdcbefec7f9a75300bb71230e35227055037945ac2f48b"
+  },
+  {
+   "name": "encoder.layers.1.linear1.bias",
+   "shape": [
+    128
+   ],
+   "offset": 260864,
+   "count": 128,
+   "sha256": "c12263f29c12336ff824b854b48e2b20f59accb80db496abb95b0f13d52c34b8"
+  },
+  {
+   "name": "encoder.layers.1.linear2.weight",
+   "shape": [
+    64,
+    128
+   ],
+   "offset": 261376,
+   "count": 8192,
+   "sha256": "48a8027d47ebf2589a768ef4c5d12f0105b4205a0f27856f8c76cd4211e2c623"
+  },
+  {
+   "name": "encoder.layers.1.linear2.bias",
+   "shape": [
+    64
+   ],
+   "offset": 294144,
+   "count": 64,
+   "sha256": "688f9800c0555d4988373092c697ebe77e9f726146fa81d8ea740e15e3e644c6"
+  },
+  {
+   "name": "encoder.layers.1.norm1.weight",
+   "shape": [
+    64
+   ],
+   "offset": 294400,
+   "count": 64,
+   "sha256": "17a7a6402f3df5fa698ab84d331df57007ada82ff021fcdbd06954b228ab0122"
+  },
+  {
+   "name": "encoder.layers.1.norm1.bias",
+   "shape": [
+    64
+   ],
+   "offset": 294656,
+   "count": 64,
+   "sha256": "20ddd620a32233f18a447638eeddf8433ac5d111abbd1fe0d3bd097771245e2d"
+  },
+  {
+   "name": "encoder.layers.1.norm2.weight",
+   "shape": [
+    64
+   ],
+   "offset": 294912,
+   "count": 64,
+   "sha256": "278e979656dd26af6a76658166f2c3345f02c9a6968b2e45b424292803cc3273"
+  },
+  {
+   "name": "encoder.layers.1.norm2.bias",
+   "shape": [
+    64
+   ],
+   "offset": 295168,
+   "count": 64,
+   "sha256": "e41eb043647404036f118be6f370032a435e1bdfc831b1ebf6d56a9f1a77eaf4"
+  },
+  {
+   "name": "out.weight",
+   "shape": [
+    88,
+    64
+   ],
+   "offset": 295424,
+   "count": 5632,
+   "sha256": "a2234efcd48fd2c0f289a579d21b7a168a3cdea3193ab303bd81d26060b78924"
+  },
+  {
+   "name": "out.bias",
+   "shape": [
+    88
+   ],
+   "offset": 317952,
+   "count": 88,
+   "sha256": "1527fa9d5f7c35afed6e019b11052fceb5fd8925d306e27fe9d86e8be50db656"
+  }
+ ]
+}
