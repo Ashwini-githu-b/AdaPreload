@@ -17,12 +17,14 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import com.adapreload.instrumentation.MainActivity
 import com.adapreload.instrumentation.R
+import com.adapreload.instrumentation.collect.TraceRuntime
 
 /**
- * Long-running foreground service that will host AdaPreload's on-device work.
+ * Long-running foreground service that hosts AdaPreload's on-device work.
  *
- * Phase A: the service only enters and holds the foreground state. It reads no usage data,
- * makes no predictions, and launches or warms no other app.
+ * Phase B: while running, it observes this device's app launches through UsageEvents and
+ * records the launch trace ([TraceRuntime]). It makes no predictions and launches or warms no
+ * other app.
  */
 class AdaPreloadForegroundService : Service() {
 
@@ -36,10 +38,14 @@ class AdaPreloadForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // Idempotent: repeated start commands keep the existing collection running.
+        TraceRuntime.startCollection(this)
         return START_STICKY
     }
 
     override fun onDestroy() {
+        // Polls once more, then closes the observation window (A7).
+        TraceRuntime.stopCollection(this)
         isRunning = false
         super.onDestroy()
     }

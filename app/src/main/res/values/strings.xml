@@ -5,16 +5,16 @@
     <string name="service_channel_name">Background service</string>
     <string name="service_channel_description">Shown while the AdaPreload foreground service is running.</string>
     <string name="service_notification_title">AdaPreload is running</string>
-    <string name="service_notification_text">Phase A: service foundation only. No usage data is collected.</string>
+    <string name="service_notification_text">Recording this device\'s app launches for the research trace. No app is preloaded.</string>
 
     <!-- Setup screen -->
     <string name="android_version">Android %1$s (API %2$d)</string>
-    <string name="phase_a_scope">Phase A: no usage events are collected, no predictions are made, and no other app is launched or preloaded.</string>
+    <string name="scope_note">Phase B: app launches are observed and recorded while the service runs. No predictions are made, and no other app is launched or preloaded.</string>
 
     <string name="usage_access_title">Usage access</string>
     <string name="usage_access_granted">Granted</string>
     <string name="usage_access_not_granted">Not granted</string>
-    <string name="usage_access_detail">Lets AdaPreload read this device\'s app-usage events in a later phase. Nothing is read yet.</string>
+    <string name="usage_access_detail">Lets AdaPreload read this device\'s app-usage events. Trace collection only observes while this is granted.</string>
     <string name="usage_access_action">Open Usage access settings</string>
 
     <string name="notifications_title">Notifications</string>
@@ -27,7 +27,28 @@
     <string name="service_title">Foreground service</string>
     <string name="service_running">Running</string>
     <string name="service_stopped">Stopped</string>
-    <string name="service_detail">Phase A foundation only: the service keeps a foreground notification and does no other work.</string>
+    <string name="service_detail">While running, the service polls usage events every few seconds and records the launch trace.</string>
     <string name="service_start">Start service</string>
     <string name="service_stop">Stop service</string>
+
+    <!-- Trace collection (Phase B) -->
+    <string name="trace_title">Trace collection</string>
+    <string name="trace_observing">Observing</string>
+    <string name="trace_not_observing">Not observing</string>
+    <string name="trace_detail">Records ACTIVITY_RESUMED usage events and builds the LSApp launch sequence (docs/ANDROID_TRACE_SPEC.md). Shadow mode: nothing is preloaded.</string>
+    <string name="trace_events_observed">Events observed</string>
+    <string name="trace_launch_candidates">Launch candidates (ACTIVITY_RESUMED)</string>
+    <string name="trace_supported">Supported launches</string>
+    <string name="trace_collapsed">Collapsed duplicates</string>
+    <string name="trace_unmapped">Unmapped (OOV, ambiguous)</string>
+    <string name="trace_excluded">Excluded (self, home, keyboard, system)</string>
+    <string name="trace_sequence_length">Sequence length</string>
+    <string name="trace_windows">Observation windows</string>
+    <string name="trace_mapping">Mapping table</string>
+    <string name="trace_mapping_value">%1$d mapped, %2$d ambiguous</string>
+    <string name="trace_last_package">Last observed package</string>
+    <string name="trace_last_classification">Last classification</string>
+    <string name="trace_last_poll">Last poll</string>
+    <string name="trace_none">-</string>
+    <string name="trace_export">Export trace (JSON)</string>
 </resources>

@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import com.adapreload.instrumentation.collect.TraceRuntime
 import com.adapreload.instrumentation.permission.NotificationAccess
 import com.adapreload.instrumentation.permission.UsageAccess
 import com.adapreload.instrumentation.service.AdaPreloadForegroundService
@@ -25,6 +26,9 @@ import com.adapreload.instrumentation.ui.NotificationAction
 import com.adapreload.instrumentation.ui.SetupScreen
 import com.adapreload.instrumentation.ui.SetupStatus
 import com.adapreload.instrumentation.ui.theme.AdapreloadTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -37,6 +41,12 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             notificationRequestDenied = !granted
             refreshStatus()
+        }
+
+    // The system file picker chooses where the export goes; no storage permission is needed.
+    private val exportLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri != null) TraceRuntime.export(this, uri)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +70,8 @@ class MainActivity : ComponentActivity() {
                         },
                         onStartService = { AdaPreloadForegroundService.start(this@MainActivity) },
                         onStopService = { AdaPreloadForegroundService.stop(this@MainActivity) },
+                        trace = TraceRuntime.status,
+                        onExportTrace = { exportLauncher.launch(exportFileName()) },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -71,7 +83,11 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Usage access and notification settings change outside the app; re-read them on return.
         refreshStatus()
+        TraceRuntime.refresh(this)
     }
+
+    private fun exportFileName(): String =
+        "adapreload_trace_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".json"
 
     private fun refreshStatus() {
         val notificationsEnabled = NotificationAccess.areEnabled(this)

@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.adapreload.instrumentation.R
+import com.adapreload.instrumentation.collect.TraceUiStatus
+import com.adapreload.instrumentation.trace.TraceCounts
 import com.adapreload.instrumentation.ui.theme.AdapreloadTheme
 
 /** What the notification row offers when notifications are not enabled. */
@@ -42,6 +44,8 @@ fun SetupScreen(
     onOpenNotificationSettings: () -> Unit,
     onStartService: () -> Unit,
     onStopService: () -> Unit,
+    trace: TraceUiStatus,
+    onExportTrace: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -117,8 +121,10 @@ fun SetupScreen(
             }
         }
 
+        TraceCard(trace = trace, onExport = onExportTrace)
+
         Text(
-            text = stringResource(R.string.phase_a_scope),
+            text = stringResource(R.string.scope_note),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -178,7 +184,14 @@ private fun SetupScreenPreview() {
             onRequestNotificationPermission = {},
             onOpenNotificationSettings = {},
             onStartService = {},
-            onStopService = {}
+            onStopService = {},
+            trace = TraceUiStatus(
+                observing = true,
+                counts = TraceCounts(observedEvents = 120, launchCandidates = 30, supportedLaunches = 12, sequenceLength = 9),
+                mappedPackages = 30,
+                ambiguousPackages = 39,
+            ),
+            onExportTrace = {}
         )
     }
 }
