@@ -17,6 +17,7 @@ com.reddit.frontpage	reddit	Reddit	57	MAPPED	high	official package id; LSApp lab
 com.pinterest	pinterest	Pinterest	52	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
 com.discord	discord	Discord	16	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
 com.amazon.mShop.android.shopping	amazon_shopping	Amazon Shopping	2	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+in.amazon.mShop.android.shopping	amazon_shopping	Amazon Shopping	2	MAPPED	high	observed on target device (Motorola edge 50 fusion, Android 16, trace 2026-10-06)	regional Amazon Shopping package; same canonical app as com.amazon.mShop.android.shopping
 com.ebay.mobile	ebay	eBay	86	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
 com.tencent.mm	wechat	WeChat	81	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
 com.microsoft.office.outlook	microsoft_outlook	Microsoft Outlook	44	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device

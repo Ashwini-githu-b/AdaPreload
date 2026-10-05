@@ -54,19 +54,49 @@ class MappingAndVocabularyTest {
         assertTrue(error("com.a\ta\t\t\tGUESSED\tx\tx\tx").contains("unknown status"))
     }
 
+    private fun shippedMapping() = PackageMapping.parse(
+        asset("package_mapping.tsv").readBytes(),
+        vocabulary,
+        LaunchClassifier.SYSTEM_EXCLUSIONS + TraceTestSupport.SELF,
+    )
+
     @Test
     fun shippedMappingTableValidatesAgainstShippedVocabulary() {
-        val table = PackageMapping.parse(
-            asset("package_mapping.tsv").readBytes(),
-            vocabulary,
-            LaunchClassifier.SYSTEM_EXCLUSIONS + TraceTestSupport.SELF,
-        )
+        val table = shippedMapping()
         val mapped = table.entries.filter { it.status == MappingStatus.MAPPED }
         assertTrue(mapped.isNotEmpty())
         mapped.forEach { assertEquals(vocabulary.idOf(it.lsappName!!), it.lsappId) }
         // Unresolved cases stay unmapped.
         listOf("com.google.android.dialer", "com.google.android.apps.messaging", "com.sec.android.gallery3d", "com.android.settings")
             .forEach { assertEquals(it, MappingStatus.AMBIGUOUS, table.lookup(it)!!.status) }
+    }
+
+    /**
+     * Regression: on the Motorola edge 50 fusion (Android 16) trace of 2026-10-06, Amazon
+     * Shopping resumed as the regional package in.amazon.mShop.android.shopping and was
+     * classified OOV, because only com.amazon.mShop.android.shopping was mapped.
+     */
+    @Test
+    fun regionalAmazonShoppingPackageMapsToLsappId2() {
+        val pkg = "in.amazon.mShop.android.shopping"
+        val table = shippedMapping()
+
+        val entry = table.lookup(pkg)!!
+        assertEquals(MappingStatus.MAPPED, entry.status)
+        assertEquals("amazon_shopping", entry.canonicalApp)
+        assertEquals("Amazon Shopping", entry.lsappName)
+        assertEquals(2, entry.lsappId)
+        assertEquals(2, vocabulary.idOf("Amazon Shopping"))
+
+        val classified = LaunchClassifier(table).classify(pkg, TraceTestSupport.env) { true }
+        assertEquals(Classification.SUPPORTED, classified.classification)
+
+        // Both Amazon Shopping packages are one canonical app, so they collapse together (T3).
+        val events = listOf(TraceTestSupport.resumed(1_000, pkg), TraceTestSupport.resumed(2_000, "com.amazon.mShop.android.shopping"))
+        val result = TracePipeline(LaunchClassifier(table))
+            .process(TraceState(), events, 1, 3_000, TraceTestSupport.env) { true }
+        assertEquals(listOf(Outcome.APPENDED, Outcome.COLLAPSED), result.records.map { it.outcome })
+        assertEquals(listOf(2, 2), result.records.map { it.appId })
     }
 
     @Test
