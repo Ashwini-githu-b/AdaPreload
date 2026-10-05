@@ -21,6 +21,7 @@ and records every place where Android departs from it.
 | Layer 1 checkpoint (`layer1_backbone_final.pt`) | SHA-256 `fd668f160363c9b32fe5ac561bec7b46ff5492d84e10f31d0bfd6d7a0c21c092` (nb[43] output) |
 | Layer 2 artifact (`layer2_probability_outputs.pkl`) | SHA-256 `bfe1e61f1c0d4a90b90dc3623db0e13887915ec05b300f5ac2128c2b8535a2c8` |
 | Layer 3 artifact (`layer3_cached_distributions.pkl`) | SHA-256 `1580e82d48d1b4eed3ba06996ae0757982b4f2587054401fd33596d449e566fd` |
+| Authoritative vocabulary | `app/src/main/assets/lsapp_vocabulary.json`, extracted from the checkpoint above (§5.4) |
 | Reproduction check | Re-running nb[3], nb[8] and nb[14] L13–15 unchanged on the public LSApp file (nb[1]) reproduces the notebook's printed counts: 1,673,261 launches, 213,496 retained launches, `VOCAB_SIZE` 88, and 19,121 same-second pairs. Vocabulary examples below come from this re-run; the checkpoint remains authoritative. |
 
 **Citation key.** `nb[i] Lx–y` = notebook cell at 0-based position `i`, source lines `x–y`
@@ -67,7 +68,10 @@ Fields used afterwards: `user_id`, `timestamp`, `app_name`. `session_id` is neve
 *Source:* nb[3] L9 (filter), L4–8 (rationale); nb[2] L5–11 (schema).
 
 **T2. Ordering.** Each user's launches are processed in ascending `timestamp` order.
-*Source:* nb[3] L11; nb[8] L15; nb[22] L20; nb[33] L121.
+The two-key sorts (nb[3] L11, nb[8] L15) keep file order for same-second ties. The per-user
+re-sorts that feed training and evaluation (nb[15] L20, nb[22] L20, nb[33] L121) use a
+single-key, non-stable sort that reorders same-second ties (§5.4, F1).
+*Source:* nb[3] L11; nb[8] L15; nb[15] L20; nb[22] L20; nb[33] L121.
 
 **T3. Consecutive-duplicate collapse.** In a user's ordered launch sequence, every run of
 consecutive launches with the same `app_name` becomes a single retained launch. It keeps the
@@ -82,6 +86,10 @@ retained launch's timestamp.
 *Source:* nb[8] L8–16. Reproduced on public LSApp with this exact code: 1,673,261 → 213,496
 launches; 24,133 retained launches span more than one `session_id`; the longest merged gap is
 8,284,861 s (about 96 days).
+
+The collapse holds in the stored `deduped` table. In the sequences actually used for training
+and evaluation, the T2 re-sort reintroduces adjacent duplicates for about 2% of examples
+(§5.4, F1). Android applies T3 as specified and has no such residue.
 
 **T4. No session segmentation.** Each user is one continuous sequence, from their first launch
 to their last. It is never split or reset by sessions, time gaps, days, screen-off or reboots.
@@ -124,7 +132,9 @@ before `i`, oldest first. Length `L = min(i, 20)`.
   launches.
 - The prediction for `i` uses only launches before `i`, so it can be computed as soon as
   launch `i−1` is retained.
-- Because of T3, a target is never the same app as the last context launch.
+- In the stored `deduped` order, a target is never the same app as the last context launch
+  (T3). In the frozen Layer 2/3 events this does not hold for 599 of 30,040 events (§5.4, F1).
+  On Android it always holds.
 
 *Source:* nb[15] L25–29; nb[22] L25–26, L35, L43.
 
@@ -385,7 +395,7 @@ the checkpoint.
 | L6 | One device is one user (n = 1). Offline results are 59-user macro statistics, so per-device results are case studies, not cohort estimates. |
 | L7 | The device user is a cold-start user, like the offline held-out users (zero adapter; first launch is context only). Early-sequence results are noisy. |
 | L8 | Gaps are not backfilled (A7). How the offline data handled its own gaps is unknown. |
-| L9 | Ordering uses Android stream order at millisecond resolution. Offline ties at 1 s are ordered by file order and an unstable sort (nb[15] L20, nb[22] L20). |
+| L9 | Ordering uses Android stream order at millisecond resolution, so the device trace has no adjacent duplicates. Offline, the unstable re-sort of same-second ties left adjacent duplicates in 1.99% of the frozen evaluation events and about 2.06% of training examples (§5.4, F1). These events are almost never hit at rank 1 (L2 Hit@1 0.015 vs 0.524 for all other events), so offline metrics are slightly lower than they would be on duplicate-free sequences. Device-vs-offline comparisons must state this. The offline results are not changed. |
 | L10 | The offline `lr = 0.001` and K = 5 were selected on the evaluation cohort (nb[43] L7–11). This caveat carries over to any device comparison. |
 | L11 | Shadow mode supports no claims about latency, memory, battery or energy (unsafe-claims list in nb[43] output). |
 
@@ -402,17 +412,14 @@ the checkpoint.
 | `layer3_cached_distributions.pkl` | No (only `n_apps`) | nb[34] L105–108 |
 | `layer3_config.json`, `layer3_final_config.json` | No | nb[39] L24–42; nb[41] L111–122; nb[43] L20–33 |
 | Notebook outputs | No: `app2id` is never printed | full notebook |
-| Files available in this session | Only the notebook | — |
 
-`app2id` cannot be extracted until `layer1_backbone_final.pt` is provided.
+### 5.2 Inputs
 
-### 5.2 What is needed
+Both files were provided on 2026-10-05, and their SHA-256 values match Provenance:
+- `layer1_backbone_final.pt` (331,499 bytes);
+- `layer2_probability_outputs.pkl` (11,365,614 bytes).
 
-- **Required:** `layer1_backbone_final.pt` from `MyDrive/AdaPreload/data/` (331,499 bytes;
-  SHA-256 `fd668f16…c092`, full value in Provenance).
-- **Optional cross-check:** `layer2_probability_outputs.pkl` (11,365,614 bytes; SHA-256
-  `bfe1e61f…a2c8`).
-- No retraining and no notebook change is involved.
+They are not committed to the repository. No retraining and no notebook change was involved.
 
 ### 5.3 Extraction procedure (read-only)
 
@@ -437,10 +444,66 @@ the checkpoint.
 | C6 | if provided, the Layer 2 artifact's `app2id` equals the checkpoint's, and `id2app` is its inverse plus `0 → '<PAD>'` | nb[33] L29–31 |
 | C7 | equals the Appendix list. A difference stops the process: the checkpoint still wins, but the difference must be explained. | Appendix |
 
-4. Export, never hand-edited: a UTF-8 JSON with `source_file`, `source_sha256`,
-   `torch_version`, `vocab_size`, `window`, `d_model`, `morph_mode`, `pad_id: 0` and `app2id`.
-   Strings must be byte-exact (e.g. U+2019 in `S’more`). It becomes an Android asset in Phase B
-   and is not created yet.
+4. Export, never hand-edited: a JSON file with provenance, model configuration, padding
+   semantics and the id → name list. Strings must be byte-exact (e.g. U+2019 in `S’more`).
+   Implemented by `tools/audit_vocabulary.py`. The script verifies the hashes before loading
+   anything, writes nothing if a gating check fails, and loads the Layer 2 pickle with an
+   unpickler that only allows the three numpy classes the file references.
+
+### 5.4 Audit result (2026-10-05)
+
+```
+python3 tools/audit_vocabulary.py layer1_backbone_final.pt layer2_probability_outputs.pkl
+```
+
+Run with torch 2.14.1 and numpy 2.4.6. Both inputs hash identically before and after the run.
+
+| ID | Check | Result |
+|---|---|---|
+| H1, H2 | SHA-256 of both inputs | PASS: match Provenance |
+| C1 | checkpoint keys | PASS: exactly the 6 expected keys |
+| C2 | config | PASS: `vocab_size` 88, `window` 20, `d_model` 64, `morph_mode` `'none'` |
+| C3 | ids 1..87, `str → int`, padding id 0 absent | PASS |
+| C4 | ids follow Python code-point sort order; stored order = id order | PASS |
+| C5 | tensor shapes; no time-feature parameters; float32 | PASS: 28 tensors, 79,576 parameters, no `time_proj`/`fuse_mlp`/`gate_net` |
+| P1 | padding embedding row 0 is exactly zero (`padding_idx=0`) | PASS |
+| C6 | Layer 2 `app2id` equals the checkpoint (content and order); `id2app` = inverse + `0 → '<PAD>'` | PASS |
+| L1 | Layer 2 scale | PASS: 30,040 events, 59 users, top-20 for L1 and L2 |
+| L2–L4 | target, top-20 and context ids all within 1..87 (padding never a target, never selected, never inside an online context) | PASS: targets span [1, 86] |
+| L5 | context length = min(event_index, 20) | PASS |
+| C7 | equals the Appendix re-run | PASS: identical |
+| W1, W2 | written file round-trips to `app2id`; `apps_sha256` recomputes | PASS |
+
+**Vocabulary mismatches: none.**
+
+**F1. Adjacent duplicates in the frozen evaluation sequences.** This is reported, not gating,
+and it is not a vocabulary issue.
+- In 599 of 30,040 Layer 2 events (1.99%, 21 of 59 users), the target equals the last
+  context app.
+- Cause: the per-user `sort_values('timestamp')` (nb[22] L20, nb[33] L121) is a single-key,
+  non-stable sort, and it reorders launches that share a 1-second timestamp.
+- Evidence:
+  - every held-out user's evaluated sequence has the same length and the same multiset of app
+    ids as the stored `deduped` order;
+  - all 1,078 positions where the order differs lie inside same-second ties;
+  - the same sort reproduces the artifact's order for 59 of 59 users (pandas 3.0.6,
+    numpy 2.4.6);
+  - the stored order has no adjacent duplicates.
+- Training (nb[15] L20, same sort; reproduced, not verified against an artifact): 3,770 of
+  183,165 examples (2.06%, 97 users).
+- Effect on these events: L1 Hit@1 0.018 / Hit@5 0.431 and L2 Hit@1 0.015 / Hit@5 0.648,
+  against 0.511 / 0.818 and 0.524 / 0.855 on all other events.
+- Consequence: see T3, T9 and L9. The offline methodology and results are unchanged; Android
+  applies T3 as specified.
+
+**Output:** `app/src/main/assets/lsapp_vocabulary.json`
+
+| Field | Value |
+|---|---|
+| File SHA-256 | `e039f4c50d8c25c52f7c9f047bba3a389d73dbad4468d9a85851be412604a7df` (6,464 bytes, ASCII; deterministic: a re-run is byte-identical) |
+| `apps_sha256` | `d0801f3b2e1ece7558989fa2fc70c86560aebb36a2e441f2ffa9b865a2147d78`: SHA-256 of the UTF-8 lines `<id>\t<name>\n`, ascending id |
+| Content | provenance (both input hashes, notebook hash, tool versions), model config, padding `{id: 0, token: "<PAD>"}`, 87 `{id, name}` entries. No package names. |
+| Consumers | none yet. Package mapping and Phase B have not started. |
 
 ---
 
