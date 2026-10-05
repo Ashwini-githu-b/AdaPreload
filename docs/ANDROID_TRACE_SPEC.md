@@ -1,8 +1,16 @@
 # ANDROID_TRACE_SPEC
 
 The rules a real-device AdaPreload trace must follow so that it stays comparable with the
-offline LSApp experiment. The offline notebook is the source of truth; this file only
-restates it and marks where Android cannot reproduce it without a methodological decision.
+offline LSApp experiment. The offline notebook is the source of truth. This file restates it
+and records every place where Android departs from it.
+
+| Section | Content |
+|---|---|
+| 1 | Exact LSApp/Colab rules (`T*`), reproduced on Android unchanged |
+| 2 | Android-specific adaptations (`A*`), decided 2026-10-05; not equivalent to LSApp |
+| 3 | Package mapping (`M*`): representation and unresolved cases |
+| 4 | Methodological limitations (`L*`) |
+| 5 | Authoritative `app2id`: artifact audit and extraction procedure |
 
 ## Provenance
 
@@ -20,6 +28,7 @@ restates it and marks where Android cannot reproduce it without a methodological
 
 | nb[i] | Header label | Colab cell id |
 |---|---|---|
+| nb[1] | CELL 2 — Download LSApp | `0H_ohA2yFYVZ` |
 | nb[2] | CELL 3 — Load and verify schema | `QcwApx0rFZ20` |
 | nb[3] | CELL 4 — Extract real launch events | `x2BElb2gGUBK` |
 | nb[8] | CELL 9 — Collapse same-app repeat-launch noise | `PL3tVbdvNtlK` |
@@ -39,15 +48,18 @@ restates it and marks where Android cannot reproduce it without a methodological
 | nb[42] | CELL 45 — FREEZE step 2 | `miDoxNKjSyys` |
 | nb[43] | CELL 46 — FREEZE step 3 | `QO-QPPEeS1xV` |
 
-**Terms.** A *launch* is a raw `Opened` record. A *retained launch* is a launch that survives
-the duplicate collapse (T3). An *event* is a retained launch that serves as a prediction
-target (T9).
+**Terms.**
+- *Launch*: offline, a raw `Opened` record; on Android, a `SUPPORTED` launch candidate (A3).
+- *Retained launch*: a launch that survives the duplicate collapse (T3).
+- *Event*: a retained launch that serves as a prediction target (T9).
+- *Observation window*: an interval during which AdaPreload is actually observing (A7).
 
 ---
 
-## Part A — Exactly reproducible rules
+## 1. Exact LSApp/Colab rules
 
-These follow from the notebook alone. Android must implement them as written.
+These follow from the notebook alone. Android must implement them as written, applied to the
+sequence produced by Section 2.
 
 **T1. Launch definition.** A launch is a record whose `event_type == 'Opened'`. Records of
 type `Closed`, `User Interaction` and `Broken` are never launches.
@@ -88,7 +100,7 @@ nb[33] L29–31 (`id2app`, `id2app[0] = '<PAD>'`).
 
 **T6. No OOV path offline.** Every offline launch is in the vocabulary by construction, and
 this is asserted. The embedding has exactly 88 rows (padding + 87 apps) and no unknown-app
-token. Android handling of unknown apps is decision A3.
+token. Android's handling of unknown apps is an adaptation (A3).
 *Source:* nb[33] L45; nb[17] L15.
 
 **T7. Context window.** `WINDOW = 20` (also stored as `ckpt['window']`). For event index
@@ -184,80 +196,287 @@ user, so macro equals micro for that device.
 
 ---
 
-## Part B — Android adaptations that require a methodological decision
+## 2. Android-specific adaptations
 
-UsageEvents cannot reproduce these from the notebook alone. Each one stays **open** until a
-decision is recorded here. No Android equivalent is assumed.
+Decided 2026-10-05. None of these is claimed to be equivalent to LSApp; each is a documented
+departure. Items marked *Validate* must be checked on the target device and API level before
+field use.
 
-**A1. What counts as `Opened`.**
-- The notebook treats `Opened` as an LSApp label only; how LSApp's collector produced it is
-  not in the notebook (nb[3] L4–9).
-- Raw LSApp contains bursts of `Opened` for the same app about 1 s apart (nb[2] output).
-- Because T3 merges same-app runs with no time limit, the *granularity* of same-app repeats
-  cannot change the retained sequence. What changes it is which *other* packages are counted
-  between them (A4) and how they map (A2).
-- *Decision:* which UsageEvents type(s) define a launch.
+### 2.1 Observation pipeline (normative order)
 
-**A2. Package name → LSApp `app_name`.**
-- The model's identifiers are LSApp display names (T5); UsageEvents give package names.
-  No mapping exists in the notebook.
-- Hard cases in the vocabulary:
-  - `Phone` vs `Android In Call UI` (often the same package);
-  - `Messages` / `Messaging` / `Verizon Messages`;
-  - `Google` / `Google Chrome` / `Microsoft Bing Search`;
-  - `Telegram` / `Telegram X`;
-  - Samsung-only entries (`Samsung Email`, `Samsung Gallery`, `Samsung Internet Browser`,
-    `Samsung Notes`, `Samsung Pay`).
-- T3 runs on the *mapped* identifier (nb[8] L8–9), so two packages mapped to one name collapse
-  together.
-- *Decision:* the mapping table, including many-to-one and one-to-many cases.
+```
+UsageEvents (calling user only)
+ → keep events inside an observation window             (A6, A7, A8)
+ → write every event to the raw trace                    (A5, AU1)
+ → launch candidates: eventType == ACTIVITY_RESUMED      (A1)
+ → classify package → SUPPORTED(app id) | discard class  (A4, Section 3)
+ → discard everything that is not SUPPORTED              (A3)
+ → collapse consecutive identical app ids                (T3)
+ → append to the prediction sequence                     (T7–T9)
+```
 
-**A3. Apps outside the vocabulary (OOV).**
-- The notebook has no OOV handling (T6).
-- Any OOV treatment changes the retained sequence. For example, `A, OOV, A` becomes `A` only
-  if OOV launches are removed before T3. It also changes the event count.
-- The model has no unknown-app token.
-- *Decision:* the OOV policy, and whether it applies before or after T3.
+**Consequence.** Discarded candidates create no boundary: `A, X, A`, where `X` is unsupported
+or excluded, yields one retained `A`. The prediction sequence therefore depends only on three
+things:
+1. the observation windows;
+2. which packages have status `MAPPED`;
+3. T3.
 
-**A4. Non-app foreground packages:** home launcher, SystemUI, keyboard, permission dialogs,
-share sheet, and AdaPreload itself.
-- The notebook does not address them.
-- Evidence: the 87-name vocabulary has no launcher, SystemUI or keyboard entry, but it does
-  include `Settings` and `Android In Call UI`.
-- Excluding the launcher makes `A → home → A` collapse to `A` under T3.
-- *Decision:* the exclusion set, and whether exclusion happens before T3.
+The exclusion rules (A4) never add or split launches. They only label discards for audit and
+keep excluded packages from ever being mapped.
 
-**A5. Timestamp source, precision and timezone.**
-- LSApp timestamps are naive strings at 1 s resolution with no stated timezone (nb[2] output;
-  nb[3] L10). UsageEvents give epoch milliseconds.
-- By T10 this affects only ordering and any exported time features.
-- 9.0% of retained LSApp launches share their second with the previous launch (nb[9] output).
-- *Decision:* the precision and timezone for exported timestamps and `hour`.
+**A1. Launch candidate = `ACTIVITY_RESUMED`.**
+- `UsageEvents.Event.ACTIVITY_RESUMED` has value 1. On API 26–28 the same value is named
+  `MOVE_TO_FOREGROUND`, so one constant covers minSdk 26+.
+- Not assumed equivalent to LSApp `Opened`, whose collector semantics are not in the notebook
+  (nb[3] L4–9). Because T3 collapses repeated same-app events, burst granularity does not
+  matter; cross-app interleavings may.
+- *Validate on the target device/API:*
+  - **V1** multi-activity apps;
+  - **V2** rotation / configuration change;
+  - **V3** screen off, then unlock with the same app on top;
+  - **V4** Home and Recents transitions;
+  - **V5** split-screen, picture-in-picture and freeform (several apps resumed at once);
+  - **V6** dialogs from other packages over an app (permission, share sheet, in-call);
+  - **V7** Custom Tabs and other cross-package activities;
+  - **V8** notification shade and Quick Settings (expected: no `ACTIVITY_RESUMED`);
+  - **V9** notification-tap trampolines;
+  - **V10** delay between a launch and its appearance in `queryEvents`.
 
-**A6. Sequence start (cold start).**
-- Offline, each user starts at their first record with a zero adapter (nb[22] L20, L28–30).
-- *Decision:* whether the device sequence starts at logging start, or is seeded with the
-  pre-install history that UsageEvents still retains. Seeding changes how comparable the
-  cold start is.
+**A3. Discard before collapse (OOV, excluded, ambiguous).**
+- Order: map → discard non-`SUPPORTED` → collapse (T3) → append.
+- LSApp has no OOV case (T6), so this rule has no offline counterpart. It is an Android
+  adaptation.
+- Every discarded candidate stays in the audit trace with its class (AU2).
 
-**A7. Observation gaps.**
-- The offline data has no notion of a missing period.
-- Launches that happen while the service is down can be recovered from UsageEvents later.
-- *Decision:* run them through T12 (flagged as backfilled), add them as context only, or drop
-  them. Each option changes the event count or the adapter's trajectory.
+**A4. Exclusions.** Classification precedence for each launch candidate (first match wins):
 
-**A8. User unit.**
-- Offline, the unit is `user_id`, with one adapter per user (nb[22] L19–31).
-- *Decision:* treatment of multiple Android users or a work profile on one device.
+| # | Class | Rule | Mechanism |
+|---|---|---|---|
+| 1 | `SELF` | AdaPreload's own package | `Context.getPackageName()` |
+| 2 | `EXCLUDED_HOME` | the current default home app | `resolveActivity(MAIN + CATEGORY_HOME, MATCH_DEFAULT_ONLY)`, re-resolved at each window start. Not "every HOME handler": Settings declares a fallback HOME activity (AOSP Settings `FallbackHome`), and `Settings` is a vocabulary app. |
+| 3 | `EXCLUDED_IME` | enabled input methods | `InputMethodManager.getEnabledInputMethodList()` package names |
+| 4 | `EXCLUDED_SYSTEM` | small explicit list (below) | exact package match |
+| 5 | `SUPPORTED` / `AMBIGUOUS` / `UNSUPPORTED` | package listed in mapping table 1 (Section 3) | mapping lookup |
+| 6 | `EXCLUDED_NON_LAUNCHABLE` | no launcher entry | `getLaunchIntentForPackage(pkg) == null` |
+| 7 | `OOV` | everything else | — |
 
-**A9. Live K.**
-- The notebook does not fix a deployment K (T14).
-- Logging the top-20 per event (T15) keeps every K computable after the fact.
-- *Decision:* only needed if a single live K must be acted on.
+- **Rows 1–4 come before the mapping**, so an excluded package can never be mapped. A mapping
+  entry for such a package is a configuration error.
+- **Row 6 comes after the mapping**, so a metadata heuristic never drops a vocabulary app that
+  is a system package without a launcher entry (for example `Android In Call UI`).
+- **No blanket `FLAG_SYSTEM` rule.** Many vocabulary apps are preinstalled system apps
+  (`Settings`, `Phone`, `Camera`, `Clock`, `Contacts`, `Messages`, …).
+- **Initial explicit list (row 4); validate on the target device:**
+  - `com.android.systemui`;
+  - permission dialogs: `com.google.android.permissioncontroller` and
+    `com.android.permissioncontroller` (API 29+), `com.google.android.packageinstaller` and
+    `com.android.packageinstaller` (API 26–28);
+  - system chooser/resolver: `android`, `com.android.intentresolver`.
+- **Package visibility:** rows 2, 3 and 6 need `<queries>` entries on API 30+ for the HOME,
+  LAUNCHER and `android.view.InputMethod` intents. Not added yet.
 
-**A10. Preload action.**
-- The notebook's planned Android stage was soft preload via `startActivity → moveTaskToBack`,
-  and it explicitly says this is *not* equivalent to AppFlow-style scheduling
-  (nb[39] L107–111).
-- Locked project decision: **shadow mode**. Android logs decisions (T14/T15) and performs no
-  preload action.
+**A5. Time.**
+- The raw `getTimeStamp()` (epoch ms) is stored unmodified in the raw trace. The device time
+  zone is recorded per observation window.
+- No time features are computed for, or fed to, the model. T10 (`morph_mode='none'`) means the
+  effective model input is the ordered app-id sequence.
+- **Ordering:** events are processed in the order `queryEvents` returns them and are not
+  re-sorted. A timestamp lower than its predecessor's (e.g. a clock change) is logged as an
+  anomaly, not reordered.
+
+**A6. Sequence start.**
+- The experiment's sequence starts when the observation service first runs with Usage Access
+  granted. Events before that instant are never read, and no history is reconstructed.
+- The first retained launch after the start is context only (T9). The Layer 2 adapter, once
+  implemented, starts at zero at that point (T12).
+- The Phase A service can run without Usage Access, but no observation window opens until
+  access is granted.
+
+**A7. Observation windows and gaps.**
+- A window opens when observation starts: the service starts with Usage Access granted, or
+  access is regained.
+- A window closes at the upper bound of the last successful `queryEvents` call before the
+  service stops, is killed, or loses Usage Access.
+- Events whose timestamps fall in a gap between windows are never processed, even though
+  UsageEvents may still return them. No backfill.
+- Each window's start, end and close reason is recorded (AU3).
+- *Interpretation, pending confirmation:* a gap does not reset the experiment. The sequence,
+  context window, collapse state and (later) adapter all continue across gaps, consistent with
+  T4. The last retained app before a gap and the first one after it are subject to T3.
+
+**A8. Profiles.**
+- Observation runs only when AdaPreload runs in the primary user's personal profile
+  (`UserManager.isSystemUser()`). Otherwise no window opens, and the reason is logged.
+- `queryEvents` only returns the calling user's events (AOSP
+  `UsageStatsService.queryEvents` → `queryEventsHelper(UserHandle.getCallingUserId(), …)`).
+  Work-profile and other-user launches therefore never reach AdaPreload. They are
+  *unobservable*, not discarded, and cannot be logged per event.
+- For audit, the profiles present on the device are logged at each window start
+  (`UserManager.getUserProfiles()`).
+
+**A9. K.** No live K is fixed. Each event logs the Layer 1 and Layer 2 top-20 (T15), so every
+K ∈ {1, 2, 4, 5, 8, 16} can be computed afterwards, exactly as offline.
+
+**A10. Preload action: shadow mode.** Decisions are logged only. No `startActivity`,
+`moveTaskToBack` or other action is ever taken on another app. The notebook's planned soft
+preload (nb[39] L107–111) is not implemented.
+
+### 2.2 Audit records
+
+| ID | Record | Content |
+|---|---|---|
+| AU1 | Raw event | every event returned inside a window: type, package, class, raw timestamp |
+| AU2 | Classification | per launch candidate: class (A4), the mapped app id if `SUPPORTED`, and whether T3 collapsed it |
+| AU3 | Observation window | start, end, close reason, time zone, home package, enabled IMEs, profiles present, mapping-table version |
+| AU4 | Anomaly | non-monotonic timestamps, `queryEvents` failures, Usage Access lost |
+
+---
+
+## 3. Package mapping (A2)
+
+### 3.1 Representation
+
+```
+Android package ─(table 1)→ canonical app identity ─(table 2)→ LSApp display name ─(app2id)→ checkpoint app id
+```
+
+| Stage | Source | Rules |
+|---|---|---|
+| Table 1: package → canonical identity | researcher-curated, per device | one row per package; status `MAPPED`, `AMBIGUOUS` or `UNSUPPORTED`; the evidence used to verify the identity is recorded |
+| Table 2: canonical identity → LSApp name | researcher-curated | at most one LSApp name per identity; the name must be an exact key of `app2id` |
+| `app2id`: LSApp name → id | extracted from the checkpoint (Section 5) | never hand-written or edited |
+
+- Only `MAPPED` rows produce `SUPPORTED` candidates. `AMBIGUOUS` and `UNSUPPORTED` rows, and
+  packages missing from table 1, are discarded under A3.
+- Several packages may share one canonical identity. They then collapse together under T3, as
+  LSApp collapses on `app_name` (nb[8] L8–9).
+- The tables are frozen for the duration of an experiment, and their version is logged per
+  window (AU3). Changing them mid-experiment changes the sequence.
+- **Current state: both tables are empty.** No mapping is assumed. Until they are authored,
+  every candidate is discarded.
+
+### 3.2 Unresolved cases (flagged, not guessed)
+
+The names come from the non-authoritative re-run (Appendix) and must be re-confirmed against
+the checkpoint.
+
+| ID | LSApp names | Why ambiguous |
+|---|---|---|
+| M1 | `Phone`, `Android In Call UI` | The dialer and the in-call screen are often one package, so a package-level mapping cannot separate them. Separating them would need activity class names, which is a further adaptation. |
+| M2 | `Messages`, `Messaging`, `Verizon Messages` | Three SMS-client labels; which device app matches which label cannot be decided from the names. |
+| M2b | `Facebook Messenger` / `Messenger Lite`, `Text One` / `TextNow`, `Telegram` / `Telegram X`, `Hangouts` | Related or similarly named apps; each must be verified as a distinct identity. `Hangouts` is discontinued. |
+| M3 | `Samsung Email`, `Samsung Gallery`, `Samsung Internet Browser`, `Samsung Notes`, `Samsung Pay`, `Flipboard Briefing` | Samsung-specific, with no counterpart on other vendors. On Samsung devices, current app names have changed (e.g. Samsung Pay is now Samsung Wallet). |
+| M4 | `Calculator`, `Calendar`, `Camera`, `Clock`, `Contacts`, `Phone`, `Messages`, `Settings`, `Maps` | Vendor-neutral role labels. Whether a device's own app for that role maps to the label is a decision. |
+| M5 | `Google Play Music`, `Hangouts`, `Twitter`, `PayPal Mobile Cash`, `Microsoft Bing Search` | Discontinued apps, or labels that differ from today's store names. Mapping by identity vs. by label, and whether a successor app maps, are decisions. |
+| M6 | `Google`, `Google Chrome`, `Microsoft Bing Search` | The Google app also hosts assistant and feed surfaces. Custom Tabs appear as the browser package (L5). |
+
+---
+
+## 4. Methodological limitations
+
+| ID | Limitation |
+|---|---|
+| L1 | `ACTIVITY_RESUMED` is not shown to be equivalent to LSApp `Opened`. Only the A1 validation can bound the difference. |
+| L2 | Discard-before-collapse has no offline counterpart. It merges runs separated by unsupported apps (`A, X, A` → `A`), which changes the transition structure relative to real usage. LSApp has only 87 apps across 292 users (nb[2] output), which suggests it was restricted to a fixed app set before release. How that restriction treated other apps is not documented in the notebook. |
+| L3 | The prediction space is the 87 LSApp apps, collected in 2017–2018. Decisions can never select an app outside the vocabulary. Results must report coverage over retained events **and** the share of launch candidates discarded, by class (AU2). |
+| L4 | Ambiguous and unmapped apps are excluded until resolved, so the device sequence covers only part of real usage. |
+| L5 | Unobservable: other profiles and users (A8); launches during gaps (A7); the true task owner of cross-package activities such as Custom Tabs and share targets. Task-root fields are system-only for third-party apps. |
+| L6 | One device is one user (n = 1). Offline results are 59-user macro statistics, so per-device results are case studies, not cohort estimates. |
+| L7 | The device user is a cold-start user, like the offline held-out users (zero adapter; first launch is context only). Early-sequence results are noisy. |
+| L8 | Gaps are not backfilled (A7). How the offline data handled its own gaps is unknown. |
+| L9 | Ordering uses Android stream order at millisecond resolution. Offline ties at 1 s are ordered by file order and an unstable sort (nb[15] L20, nb[22] L20). |
+| L10 | The offline `lr = 0.001` and K = 5 were selected on the evaluation cohort (nb[43] L7–11). This caveat carries over to any device comparison. |
+| L11 | Shadow mode supports no claims about latency, memory, battery or energy (unsafe-claims list in nb[43] output). |
+
+---
+
+## 5. Authoritative `app2id`: artifact audit
+
+### 5.1 Where `app2id` exists
+
+| Artifact | Contains `app2id`? | Evidence |
+|---|---|---|
+| `layer1_backbone_final.pt` | **Yes.** Key `app2id` (dict `str → int`), next to `model_state_dict`, `vocab_size`, `window`, `d_model`, `morph_mode` | nb[20] L26–33 |
+| `layer2_probability_outputs.pkl` | **Yes, as a copy.** `app2id` = `ckpt['app2id']`, plus `id2app` with `0 → '<PAD>'` | nb[33] L29–31, L201 |
+| `layer3_cached_distributions.pkl` | No (only `n_apps`) | nb[34] L105–108 |
+| `layer3_config.json`, `layer3_final_config.json` | No | nb[39] L24–42; nb[41] L111–122; nb[43] L20–33 |
+| Notebook outputs | No: `app2id` is never printed | full notebook |
+| Files available in this session | Only the notebook | — |
+
+`app2id` cannot be extracted until `layer1_backbone_final.pt` is provided.
+
+### 5.2 What is needed
+
+- **Required:** `layer1_backbone_final.pt` from `MyDrive/AdaPreload/data/` (331,499 bytes;
+  SHA-256 `fd668f16…c092`, full value in Provenance).
+- **Optional cross-check:** `layer2_probability_outputs.pkl` (11,365,614 bytes; SHA-256
+  `bfe1e61f…a2c8`).
+- No retraining and no notebook change is involved.
+
+### 5.3 Extraction procedure (read-only)
+
+1. Verify that the file's SHA-256 equals the Provenance value. Stop if it does not.
+2. Load it with `torch.load(path, map_location='cpu', weights_only=True)`.
+   - The notebook loads with `weights_only=False` (nb[21] L5); extraction doesn't need that.
+   - `weights_only=True` only rebuilds tensors and plain containers, so loading the file
+     cannot run arbitrary code.
+   - Tested 2026-10-05 with torch 2.14.1 on a stand-in checkpoint with the same structure (the
+     nb[17] model with `morph_mode='none'`, and `app2id` from the Appendix). It loads.
+   - The stand-in is 331,017 bytes and holds 79,576 parameters. That is consistent with the
+     real 331,499-byte file containing nothing else of significant size.
+3. All acceptance checks must pass:
+
+| ID | Check | Source |
+|---|---|---|
+| C1 | keys are exactly `model_state_dict, app2id, vocab_size, window, d_model, morph_mode` | nb[20] L26–33 |
+| C2 | `vocab_size == 88`, `window == 20`, `d_model == 64`, `morph_mode == 'none'` | nb[20] L8, L29–32 |
+| C3 | 87 entries; ids exactly 1..87; keys are `str` and values are `int`; id 0 absent | nb[14] L13–15 |
+| C4 | `app2id[name] == i + 1` for each `i, name in enumerate(sorted(app2id))` | nb[14] L13–14 |
+| C5 | `app_emb.weight` is (88, 64), `pos_emb.weight` (20, 64), `out.weight` (88, 64), `out.bias` (88,); no `time_proj`, `fuse_mlp` or `gate_net` keys | nb[17] L15–27; T10 |
+| C6 | if provided, the Layer 2 artifact's `app2id` equals the checkpoint's, and `id2app` is its inverse plus `0 → '<PAD>'` | nb[33] L29–31 |
+| C7 | equals the Appendix list. A difference stops the process: the checkpoint still wins, but the difference must be explained. | Appendix |
+
+4. Export, never hand-edited: a UTF-8 JSON with `source_file`, `source_sha256`,
+   `torch_version`, `vocab_size`, `window`, `d_model`, `morph_mode`, `pad_id: 0` and `app2id`.
+   Strings must be byte-exact (e.g. U+2019 in `S’more`). It becomes an Android asset in Phase B
+   and is not created yet.
+
+---
+
+## Appendix: vocabulary from the public-LSApp re-run (NON-AUTHORITATIVE)
+
+Produced by nb[14] L13–14 on the public LSApp file. Use it only for planning Section 3 and for
+check C7. The expected id is the position in the list.
+
+| id | name | id | name | id | name |
+|---|---|---|---|---|---|
+| 1 | `AOL` | 30 | `Hangouts` | 59 | `Robinhood` |
+| 2 | `Amazon Shopping` | 31 | `Hulu` | 60 | `Samsung Email` |
+| 3 | `Android In Call UI` | 32 | `Ibotta` | 61 | `Samsung Gallery` |
+| 4 | `Army Men Strike` | 33 | `Instagram` | 62 | `Samsung Internet Browser` |
+| 5 | `Badoo` | 34 | `Kik` | 63 | `Samsung Notes` |
+| 6 | `Baseball Boy!` | 35 | `Lucktastic` | 64 | `Samsung Pay` |
+| 7 | `Brave Browser` | 36 | `MAX Cleaner` | 65 | `Settings` |
+| 8 | `Calculator` | 37 | `MUIQ Survey App` | 66 | `Slidejoy` |
+| 9 | `Calendar` | 38 | `Maps` | 67 | `Snapchat` |
+| 10 | `Calorie Counter` | 39 | `Messages` | 68 | `Spotify Music` |
+| 11 | `Camera` | 40 | `Messaging` | 69 | `SurveyCow` |
+| 12 | `Clean Master` | 41 | `Messenger Lite` | 70 | `Swagbucks` |
+| 13 | `Clock` | 42 | `MetroZone` | 71 | `Swagbucks Watch (TV)` |
+| 14 | `Contacts` | 43 | `Microsoft Bing Search` | 72 | `S’more` |
+| 15 | `DigiHUD Pro Speedometer` | 44 | `Microsoft Outlook` | 73 | `Telegram` |
+| 16 | `Discord` | 45 | `Minesweeper Classic (Mines)` | 74 | `Telegram X` |
+| 17 | `EntertaiNow` | 46 | `Movie Play Box` | 75 | `Text One` |
+| 18 | `Facebook` | 47 | `Netflix` | 76 | `TextNow` |
+| 19 | `Facebook Messenger` | 48 | `OfferUp` | 77 | `The PCH App` |
+| 20 | `Faceu` | 49 | `Pandora Music` | 78 | `Twitter` |
+| 21 | `Flickr` | 50 | `PayPal Mobile Cash` | 79 | `Verizon Messages` |
+| 22 | `Flipboard Briefing` | 51 | `Phone` | 80 | `Walmart` |
+| 23 | `Gmail` | 52 | `Pinterest` | 81 | `WeChat` |
+| 24 | `Google` | 53 | `Pixlr` | 82 | `WhatsApp Messenger` |
+| 25 | `Google Chrome` | 54 | `Podcast Addict` | 83 | `Words With Friends 2` |
+| 26 | `Google Drive` | 55 | `Quora` | 84 | `Yahoo Mail` |
+| 27 | `Google Photos` | 56 | `Receipt Hog` | 85 | `YouTube` |
+| 28 | `Google Play Music` | 57 | `Reddit` | 86 | `eBay` |
+| 29 | `Google Play Store` | 58 | `Reward Stash` | 87 | `imo` |
