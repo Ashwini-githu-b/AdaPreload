@@ -1,3 +1,33 @@
 <resources>
-    <string name="app_name">Adapreload</string>
+    <string name="app_name">AdaPreload</string>
+
+    <!-- Foreground service notification -->
+    <string name="service_channel_name">Background service</string>
+    <string name="service_channel_description">Shown while the AdaPreload foreground service is running.</string>
+    <string name="service_notification_title">AdaPreload is running</string>
+    <string name="service_notification_text">Phase A: service foundation only. No usage data is collected.</string>
+
+    <!-- Setup screen -->
+    <string name="android_version">Android %1$s (API %2$d)</string>
+    <string name="phase_a_scope">Phase A: no usage events are collected, no predictions are made, and no other app is launched or preloaded.</string>
+
+    <string name="usage_access_title">Usage access</string>
+    <string name="usage_access_granted">Granted</string>
+    <string name="usage_access_not_granted">Not granted</string>
+    <string name="usage_access_detail">Lets AdaPreload read this device\'s app-usage events in a later phase. Nothing is read yet.</string>
+    <string name="usage_access_action">Open Usage access settings</string>
+
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_enabled">Enabled</string>
+    <string name="notifications_disabled">Disabled</string>
+    <string name="notifications_detail">Shows the foreground-service notification. If disabled, the service still runs but its notification is hidden.</string>
+    <string name="notifications_allow">Allow notifications</string>
+    <string name="notifications_open_settings">Open notification settings</string>
+
+    <string name="service_title">Foreground service</string>
+    <string name="service_running">Running</string>
+    <string name="service_stopped">Stopped</string>
+    <string name="service_detail">Phase A foundation only: the service keeps a foreground notification and does no other work.</string>
+    <string name="service_start">Start service</string>
+    <string name="service_stop">Stop service</string>
 </resources>
