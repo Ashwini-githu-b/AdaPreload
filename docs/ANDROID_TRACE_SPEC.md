@@ -373,8 +373,12 @@ Android package ─(table 1)→ canonical app identity ─(table 2)→ LSApp dis
   - packages are unique;
   - always-excluded packages cannot be mapped.
 - **Current state (Phase B, 2026-10-05):**
-  - 30 `MAPPED` rows: apps whose LSApp label is the app's own brand name, under their official
-    package id (confidence `high`, not yet verified on the target device);
+  - 31 `MAPPED` rows:
+    - 30 apps whose LSApp label is the app's own brand name, under their official package id
+      (confidence `high`, not yet verified on the target device);
+    - `in.amazon.mShop.android.shopping` → `Amazon Shopping` (id 2), the regional package
+      observed on the Motorola edge 50 fusion (Android 16) trace of 2026-10-06, where it had
+      been classified OOV;
   - 39 `AMBIGUOUS` rows recording M1–M6. These are counted separately and never mapped.
 
 ### 3.2 Unresolved cases (flagged, not guessed)
