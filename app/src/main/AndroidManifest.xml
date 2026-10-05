@@ -14,6 +14,22 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!-- Package visibility (API 30+) for launch classification (ANDROID_TRACE_SPEC A4): the
+         default home app, enabled keyboards, and whether a package has a launcher entry. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.view.InputMethod" />
+        </intent>
+    </queries>
+
     <!-- Research usage traces must never leave the device, so backup is off and the backup and
          data-extraction rules exclude every domain as well. -->
     <application

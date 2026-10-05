@@ -11,6 +11,7 @@ and records every place where Android departs from it.
 | 3 | Package mapping (`M*`): representation and unresolved cases |
 | 4 | Methodological limitations (`L*`) |
 | 5 | Authoritative `app2id`: artifact audit and extraction procedure |
+| 6 | Phase B implementation: where each rule lives in the code |
 
 ## Provenance
 
@@ -284,7 +285,7 @@ keep excluded packages from ever being mapped.
     `com.android.packageinstaller` (API 26–28);
   - system chooser/resolver: `android`, `com.android.intentresolver`.
 - **Package visibility:** rows 2, 3 and 6 need `<queries>` entries on API 30+ for the HOME,
-  LAUNCHER and `android.view.InputMethod` intents. Not added yet.
+  LAUNCHER and `android.view.InputMethod` intents. These are declared in the manifest.
 
 **A5. Time.**
 - The raw `getTimeStamp()` (epoch ms) is stored unmodified in the raw trace. The device time
@@ -311,9 +312,9 @@ keep excluded packages from ever being mapped.
 - Events whose timestamps fall in a gap between windows are never processed, even though
   UsageEvents may still return them. No backfill.
 - Each window's start, end and close reason is recorded (AU3).
-- *Interpretation, pending confirmation:* a gap does not reset the experiment. The sequence,
-  context window, collapse state and (later) adapter all continue across gaps, consistent with
-  T4. The last retained app before a gap and the first one after it are subject to T3.
+- **Locked 2026-10-05:** a gap does not reset the experiment. The sequence, context window,
+  collapse state and (later) adapter all continue across gaps, consistent with T4. The last
+  retained app before a gap and the first one after it are subject to T3.
 
 **A8. Profiles.**
 - Observation runs only when AdaPreload runs in the primary user's personal profile
@@ -363,8 +364,18 @@ Android package ─(table 1)→ canonical app identity ─(table 2)→ LSApp dis
   LSApp collapses on `app_name` (nb[8] L8–9).
 - The tables are frozen for the duration of an experiment, and their version is logged per
   window (AU3). Changing them mid-experiment changes the sequence.
-- **Current state: both tables are empty.** No mapping is assumed. Until they are authored,
-  every candidate is discarded.
+- **Storage:** tables 1 and 2 are kept as one tab-separated file,
+  `app/src/main/assets/package_mapping.tsv`, with columns `package, canonical_app, lsapp_name,
+  lsapp_id, status, confidence, source, notes`. It is validated against the vocabulary at load,
+  and any invalid row stops collection:
+  - a MAPPED name must be a vocabulary key, and its id must match;
+  - one canonical identity maps to one LSApp name;
+  - packages are unique;
+  - always-excluded packages cannot be mapped.
+- **Current state (Phase B, 2026-10-05):**
+  - 30 `MAPPED` rows: apps whose LSApp label is the app's own brand name, under their official
+    package id (confidence `high`, not yet verified on the target device);
+  - 39 `AMBIGUOUS` rows recording M1–M6. These are counted separately and never mapped.
 
 ### 3.2 Unresolved cases (flagged, not guessed)
 
@@ -504,6 +515,40 @@ and it is not a vocabulary issue.
 | `apps_sha256` | `d0801f3b2e1ece7558989fa2fc70c86560aebb36a2e441f2ffa9b865a2147d78`: SHA-256 of the UTF-8 lines `<id>\t<name>\n`, ascending id |
 | Content | provenance (both input hashes, notebook hash, tool versions), model config, padding `{id: 0, token: "<PAD>"}`, 87 `{id, name}` entries. No package names. |
 | Consumers | none yet. Package mapping and Phase B have not started. |
+
+---
+
+## 6. Phase B implementation
+
+Code in `app/src/main/java/com/adapreload/instrumentation/`. The `trace/` package has no
+Android imports and is unit-tested on the JVM (`app/src/test/.../trace/`).
+
+| Rule | Implementation |
+|---|---|
+| A1 launch candidate, A3 discard before collapse, T3 collapse (first timestamp kept), A5 stream order | `trace/TracePipeline.kt` |
+| A4 classification precedence and explicit system list | `trace/LaunchClassifier.kt` |
+| A4 default home only, enabled IMEs, launcher entry; A8 primary user, unlocked | `collect/AndroidTraceSources.kt` (`AndroidEnvironment`) |
+| Raw events from `queryEvents` | `collect/AndroidTraceSources.kt` (`UsageStatsEventSource`) |
+| A6, A7 windows, incremental polling, no backfill, recovery after process death | `trace/TraceSession.kt` |
+| Exactly-once persistence; sequence state derived from stored events | `collect/SqliteTraceStore.kt` |
+| Section 3 mapping table | `trace/PackageMapping.kt`, `assets/package_mapping.tsv` |
+| T5 vocabulary, verified by `apps_sha256` at load | `trace/Vocabulary.kt`, `assets/lsapp_vocabulary.json` |
+| AU1–AU4 audit export | `trace/TraceExporter.kt` |
+| Polling loop (every 5 s on one background thread), status, export | `collect/TraceRuntime.kt` |
+
+**Incremental polling.**
+- Each poll queries `[cursor, now − 2 s)` and commits the records and the new cursor in one
+  SQLite transaction, so every event is processed exactly once.
+- The 2 s settle delay covers events the platform has stamped but not yet inserted: AOSP sets
+  `mTimeStamp` when the event is reported and inserts it later on a handler thread.
+- If the wall clock is behind the cursor, nothing is queried until it catches up.
+
+**Restart.** On service start, a window left open by a dead process is closed at its cursor
+(`PROCESS_ENDED`). A new window then opens at the current time, so gap events are never read.
+The sequence state is re-derived from the stored records.
+
+**Not implemented in Phase B:** Layer 1 inference, the Layer 2 adapter, any model runtime,
+preload actions, K selection and prediction UI.
 
 ---
 

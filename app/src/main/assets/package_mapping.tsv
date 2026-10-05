@@ -1,0 +1,76 @@
+# AdaPreload package mapping table (docs/ANDROID_TRACE_SPEC.md section 3).
+# Android package -> canonical app identity -> LSApp display name -> checkpoint app id.
+# Tab-separated. lsapp_name/lsapp_id must match assets/lsapp_vocabulary.json exactly and are set only for MAPPED rows.
+# MAPPED rows produce SUPPORTED launches. AMBIGUOUS and UNSUPPORTED rows, and unlisted packages, are discarded (A3).
+# AMBIGUOUS rows record unresolved cases (M1-M6) so they are counted separately; they are never guessed.
+# Freeze this file before an experiment: its SHA-256 is recorded with every observation window.
+package	canonical_app	lsapp_name	lsapp_id	status	confidence	source	notes
+com.facebook.katana	facebook	Facebook	18	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.instagram.android	instagram	Instagram	33	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.whatsapp	whatsapp	WhatsApp Messenger	82	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.snapchat.android	snapchat	Snapchat	67	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.google.android.youtube	youtube	YouTube	85	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.netflix.mediaclient	netflix	Netflix	47	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.spotify.music	spotify	Spotify Music	68	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.google.android.gm	gmail	Gmail	23	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.reddit.frontpage	reddit	Reddit	57	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.pinterest	pinterest	Pinterest	52	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.discord	discord	Discord	16	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.amazon.mShop.android.shopping	amazon_shopping	Amazon Shopping	2	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.ebay.mobile	ebay	eBay	86	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.tencent.mm	wechat	WeChat	81	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.microsoft.office.outlook	microsoft_outlook	Microsoft Outlook	44	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.google.android.apps.docs	google_drive	Google Drive	26	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.google.android.apps.photos	google_photos	Google Photos	27	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.android.vending	google_play_store	Google Play Store	29	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.hulu.plus	hulu	Hulu	31	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.pandora.android	pandora	Pandora Music	49	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.yahoo.mobile.client.android.mail	yahoo_mail	Yahoo Mail	84	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.quora.android	quora	Quora	55	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.imo.android.imoim	imo	imo	87	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+kik.android	kik	Kik	34	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.brave.browser	brave_browser	Brave Browser	7	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.robinhood.android	robinhood	Robinhood	59	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.bambuna.podcastaddict	podcast_addict	Podcast Addict	54	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.walmart.android	walmart	Walmart	80	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.badoo.mobile	badoo	Badoo	5	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.cleanmaster.mguard	clean_master	Clean Master	12	MAPPED	high	official package id; LSApp label is the app's brand name	not yet verified on the target device
+com.google.android.dialer	google_phone			AMBIGUOUS	unresolved	spec M1	Phone vs Android In Call UI: dialer and in-call screen share this package
+com.android.dialer	aosp_dialer			AMBIGUOUS	unresolved	spec M1	Phone vs Android In Call UI
+com.android.incallui	aosp_incallui			AMBIGUOUS	unresolved	spec M1	Phone vs Android In Call UI
+com.samsung.android.dialer	samsung_phone			AMBIGUOUS	unresolved	spec M1	Phone vs Android In Call UI
+com.samsung.android.incallui	samsung_incallui			AMBIGUOUS	unresolved	spec M1	Phone vs Android In Call UI
+com.google.android.apps.messaging	google_messages			AMBIGUOUS	unresolved	spec M2	Messages / Messaging / Verizon Messages: label cannot be decided from names
+com.samsung.android.messaging	samsung_messages			AMBIGUOUS	unresolved	spec M2	Messages / Messaging / Verizon Messages
+com.android.mms	aosp_messaging			AMBIGUOUS	unresolved	spec M2	Messages / Messaging / Verizon Messages
+com.verizon.messaging.vzmsgs	verizon_message_plus			AMBIGUOUS	unresolved	spec M2	Messages / Messaging / Verizon Messages
+com.facebook.orca	facebook_messenger			AMBIGUOUS	unresolved	spec M2b	Facebook Messenger vs Messenger Lite: verify as distinct identities
+com.facebook.mlite	messenger_lite			AMBIGUOUS	unresolved	spec M2b	Messenger Lite is discontinued; verify identity
+org.telegram.messenger	telegram			AMBIGUOUS	unresolved	spec M2b	Telegram vs Telegram X: verify as distinct identities
+org.thunderdog.challegram	telegram_x			AMBIGUOUS	unresolved	spec M2b	Telegram vs Telegram X: verify as distinct identities
+com.enflick.android.TextNow	textnow			AMBIGUOUS	unresolved	spec M2b	TextNow vs Text One: verify as distinct identities
+com.google.android.talk	hangouts			AMBIGUOUS	unresolved	spec M2b	Hangouts is discontinued
+com.samsung.android.email.provider	samsung_email			AMBIGUOUS	unresolved	spec M3	Samsung-specific; verify current app name
+com.sec.android.gallery3d	samsung_gallery			AMBIGUOUS	unresolved	spec M3	Samsung-specific; verify current app name
+com.sec.android.app.sbrowser	samsung_internet			AMBIGUOUS	unresolved	spec M3	Samsung-specific; verify current app name
+com.samsung.android.app.notes	samsung_notes			AMBIGUOUS	unresolved	spec M3	Samsung-specific; verify current app name
+com.samsung.android.spay	samsung_pay			AMBIGUOUS	unresolved	spec M3	Samsung Pay is now Samsung Wallet
+flipboard.boxer.app	flipboard_briefing			AMBIGUOUS	unresolved	spec M3	Samsung feed panel; may behave like part of the launcher
+com.android.settings	settings			AMBIGUOUS	unresolved	spec M4	Role label Settings; also declares a fallback HOME activity
+com.google.android.GoogleCamera	google_camera			AMBIGUOUS	unresolved	spec M4	Role label Camera
+com.sec.android.app.camera	samsung_camera			AMBIGUOUS	unresolved	spec M4	Role label Camera
+com.google.android.deskclock	google_clock			AMBIGUOUS	unresolved	spec M4	Role label Clock
+com.sec.android.app.clockpackage	samsung_clock			AMBIGUOUS	unresolved	spec M4	Role label Clock
+com.google.android.calculator	google_calculator			AMBIGUOUS	unresolved	spec M4	Role label Calculator
+com.sec.android.app.popupcalculator	samsung_calculator			AMBIGUOUS	unresolved	spec M4	Role label Calculator
+com.google.android.calendar	google_calendar			AMBIGUOUS	unresolved	spec M4	Role label Calendar
+com.samsung.android.calendar	samsung_calendar			AMBIGUOUS	unresolved	spec M4	Role label Calendar
+com.google.android.contacts	google_contacts			AMBIGUOUS	unresolved	spec M4	Role label Contacts
+com.samsung.android.app.contacts	samsung_contacts			AMBIGUOUS	unresolved	spec M4	Role label Contacts
+com.google.android.apps.maps	google_maps			AMBIGUOUS	unresolved	spec M4	Role label Maps
+com.twitter.android	twitter			AMBIGUOUS	unresolved	spec M5	Twitter is now X: identity vs label decision
+com.google.android.music	google_play_music			AMBIGUOUS	unresolved	spec M5	Discontinued; successor mapping is a decision
+com.paypal.android.p2pmobile	paypal			AMBIGUOUS	unresolved	spec M5	Label PayPal Mobile Cash differs from today's name
+com.microsoft.bing	microsoft_bing			AMBIGUOUS	unresolved	spec M5	Label Microsoft Bing Search differs from today's name
+com.google.android.googlequicksearchbox	google_app			AMBIGUOUS	unresolved	spec M6	Google app also hosts assistant and feed surfaces
+com.android.chrome	google_chrome			AMBIGUOUS	unresolved	spec M6	Custom Tabs from other apps are attributed to this package (L5)
