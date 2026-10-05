@@ -1,5 +1,6 @@
 package com.adapreload.instrumentation.collect
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import android.os.Handler
@@ -54,6 +55,8 @@ object TraceRuntime {
     // Touched only on the executor thread.
     private var config: Config? = null
     private var store: SqliteTraceStore? = null
+    // Holds the application context only (see startCollection), which lives as long as the process.
+    @SuppressLint("StaticFieldLeak")
     private var environment: AndroidEnvironment? = null
     private var session: TraceSession? = null
     private var pollTask: ScheduledFuture<*>? = null
