@@ -49,6 +49,12 @@ class MainActivity : ComponentActivity() {
             if (uri != null) TraceRuntime.export(this, uri)
         }
 
+    // Phase E2a: a separate picker for the read-only service inventory report.
+    private val exportInventoryLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri != null) TraceRuntime.exportInventory(this, uri)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -72,6 +78,8 @@ class MainActivity : ComponentActivity() {
                         onStopService = { AdaPreloadForegroundService.stop(this@MainActivity) },
                         trace = TraceRuntime.status,
                         onExportTrace = { exportLauncher.launch(exportFileName()) },
+                        onScanInventory = { TraceRuntime.inventoryServices(this@MainActivity) },
+                        onExportInventory = { exportInventoryLauncher.launch(inventoryFileName()) },
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
@@ -88,6 +96,9 @@ class MainActivity : ComponentActivity() {
 
     private fun exportFileName(): String =
         "adapreload_trace_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".json"
+
+    private fun inventoryFileName(): String =
+        "adapreload_service_inventory_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".json"
 
     private fun refreshStatus() {
         val notificationsEnabled = NotificationAccess.areEnabled(this)

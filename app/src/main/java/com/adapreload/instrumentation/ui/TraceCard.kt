@@ -26,7 +26,12 @@ import java.util.Locale
 
 /** Status and debug view of trace collection and the live Layer 2 adapter. */
 @Composable
-fun TraceCard(trace: TraceUiStatus, onExport: () -> Unit) {
+fun TraceCard(
+    trace: TraceUiStatus,
+    onExport: () -> Unit,
+    onScanInventory: () -> Unit,
+    onExportInventory: () -> Unit,
+) {
     val c = trace.counts
     val none = stringResource(R.string.trace_none)
     val last = c.lastCandidate
@@ -120,11 +125,23 @@ fun TraceCard(trace: TraceUiStatus, onExport: () -> Unit) {
                     }
                 } ?: none
             )
+            val inventory = trace.inventory
+            StatRow(
+                R.string.inventory_warmable,
+                inventory?.let { stringResource(R.string.inventory_warmable_value, it.warmableApps, it.installedApps) } ?: none
+            )
             trace.message?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             OutlinedButton(onClick = onExport) {
                 Text(stringResource(R.string.trace_export))
+            }
+            // Phase E2a: read-only service warmability scan. Reads PackageManager metadata; preloads nothing.
+            OutlinedButton(onClick = onScanInventory) {
+                Text(stringResource(R.string.inventory_scan))
+            }
+            OutlinedButton(onClick = onExportInventory, enabled = inventory?.reportAvailable == true) {
+                Text(stringResource(R.string.inventory_export))
             }
         }
     }

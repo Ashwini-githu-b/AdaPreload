@@ -68,4 +68,10 @@
     <string name="shadow_last_decision">Last shadow decision</string>
     <string name="shadow_last_preload">#%1$d %2$s, rank %3$d, p=%4$s: PRELOAD (not executed)</string>
     <string name="shadow_last_skip">#%1$d %2$s, rank %3$d, p=%4$s: SKIP (%5$s)</string>
+
+    <!-- Phase E2a read-only service warmability inventory -->
+    <string name="inventory_warmable">Warmable mapped apps</string>
+    <string name="inventory_warmable_value">%1$d / %2$d (installed)</string>
+    <string name="inventory_scan">Scan warmable services (read-only)</string>
+    <string name="inventory_export">Export service inventory (JSON)</string>
 </resources>

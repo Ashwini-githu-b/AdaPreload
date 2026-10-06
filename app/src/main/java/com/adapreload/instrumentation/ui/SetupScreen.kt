@@ -46,6 +46,8 @@ fun SetupScreen(
     onStopService: () -> Unit,
     trace: TraceUiStatus,
     onExportTrace: () -> Unit,
+    onScanInventory: () -> Unit,
+    onExportInventory: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -121,7 +123,12 @@ fun SetupScreen(
             }
         }
 
-        TraceCard(trace = trace, onExport = onExportTrace)
+        TraceCard(
+            trace = trace,
+            onExport = onExportTrace,
+            onScanInventory = onScanInventory,
+            onExportInventory = onExportInventory,
+        )
 
         Text(
             text = stringResource(R.string.scope_note),
@@ -191,7 +198,9 @@ private fun SetupScreenPreview() {
                 mappedPackages = 30,
                 ambiguousPackages = 39,
             ),
-            onExportTrace = {}
+            onExportTrace = {},
+            onScanInventory = {},
+            onExportInventory = {},
         )
     }
 }
