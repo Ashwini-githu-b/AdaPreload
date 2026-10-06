@@ -22,7 +22,7 @@ import com.adapreload.instrumentation.trace.Classification
 import java.text.DateFormat
 import java.util.Date
 
-/** Phase B status and debug view of trace collection. */
+/** Status and debug view of trace collection and the live Layer 2 adapter. */
 @Composable
 fun TraceCard(trace: TraceUiStatus, onExport: () -> Unit) {
     val c = trace.counts
@@ -73,6 +73,24 @@ fun TraceCard(trace: TraceUiStatus, onExport: () -> Unit) {
             StatRow(
                 R.string.trace_last_poll,
                 c.lastPollMs?.let { DateFormat.getTimeInstance(DateFormat.MEDIUM).format(Date(it)) } ?: none
+            )
+            val l2 = trace.layer2
+            StatRow(R.string.layer2_updates, l2?.updateCount?.toString() ?: none)
+            StatRow(
+                R.string.layer2_last_launch,
+                l2?.lastPosition?.let { stringResource(R.string.layer2_last_launch_value, it) } ?: none
+            )
+            StatRow(
+                R.string.layer2_last_reveal,
+                l2?.lastReveal?.let {
+                    stringResource(R.string.layer2_last_reveal_value, it.predictionPosition, it.layer1Rank, it.layer2Rank)
+                } ?: none
+            )
+            StatRow(
+                R.string.layer2_next,
+                if (l2?.nextLayer1Top1 != null && l2.nextLayer2Top1 != null) {
+                    stringResource(R.string.layer2_next_value, l2.nextLayer1Top1, l2.nextLayer2Top1)
+                } else none
             )
             trace.message?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

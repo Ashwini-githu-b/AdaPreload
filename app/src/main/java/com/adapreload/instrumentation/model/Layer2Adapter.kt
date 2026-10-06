@@ -76,9 +76,23 @@ class Layer2Adapter(val inputSize: Int = HIDDEN_SIZE, val outputSize: Int = OUTP
         updateCount = 0
     }
 
+    /** A new adapter with exactly this state. */
+    fun copy(): Layer2Adapter = restore(weight, bias, updateCount)
+
     companion object {
         const val HIDDEN_SIZE = 64
         const val OUTPUT_SIZE = 88
+
+        /** An adapter holding exactly [weight] (row-major), [bias] and [updateCount], e.g. read back from storage. */
+        fun restore(weight: FloatArray, bias: FloatArray, updateCount: Long): Layer2Adapter {
+            val adapter = Layer2Adapter()
+            require(weight.size == adapter.weight.size && bias.size == adapter.bias.size) { "Adapter state has the wrong shape" }
+            require(updateCount >= 0) { "updateCount must not be negative" }
+            weight.copyInto(adapter.weight)
+            bias.copyInto(adapter.bias)
+            adapter.updateCount = updateCount
+            return adapter
+        }
 
         /** 0.001 as FP32 (0.0010000000474974513): PyTorch applies the learning rate to FP32 parameters in FP32. */
         const val LEARNING_RATE = 0.001f

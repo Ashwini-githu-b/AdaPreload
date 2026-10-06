@@ -555,7 +555,10 @@ The sequence state is re-derived from the stored records.
 preload actions, K selection and prediction UI.
 
 **Phase C:** frozen Layer 1 inference with numerical parity to the checkpoint is in
-`docs/LAYER1_ANDROID_INFERENCE.md`. It is not yet connected to this trace.
+`docs/LAYER1_ANDROID_INFERENCE.md`.
+
+**Phase D/D2:** the Layer 2 adapter is in `docs/LAYER2_ANDROID_ADAPTER.md`. Its live connection to
+this trace, persisted in the same transaction as each batch, is in `docs/LAYER2_LIVE_INTEGRATION.md`.
 
 ---
 
