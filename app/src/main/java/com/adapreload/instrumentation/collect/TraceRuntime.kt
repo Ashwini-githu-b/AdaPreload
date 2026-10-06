@@ -13,6 +13,10 @@ import com.adapreload.instrumentation.live.Layer2LogEntry
 import com.adapreload.instrumentation.live.LivePersonalizer
 import com.adapreload.instrumentation.live.PersonalizedTraceStore
 import com.adapreload.instrumentation.live.Reveal
+import com.adapreload.instrumentation.inventory.AndroidPackageServiceSource
+import com.adapreload.instrumentation.inventory.InventoryReport
+import com.adapreload.instrumentation.inventory.ServiceInventoryResult
+import com.adapreload.instrumentation.inventory.ServiceWarmabilityInventory
 import com.adapreload.instrumentation.model.Layer1Assets
 import com.adapreload.instrumentation.permission.UsageAccess
 import com.adapreload.instrumentation.shadow.MappingCandidateResolver
@@ -47,6 +51,17 @@ data class TraceUiStatus(
     val layer2: Layer2UiStatus? = null,
     /** Phase E1 shadow preload policy; null until Layer 2 has been opened in this process. */
     val shadow: ShadowUiStatus? = null,
+    /** Phase E2a service warmability inventory; null until a read-only scan is run. */
+    val inventory: InventoryUiStatus? = null,
+)
+
+/** Phase E2a diagnostics. A read-only count; no service is bound or started. */
+data class InventoryUiStatus(
+    val summary: String,
+    val warmableApps: Int,
+    val installedApps: Int,
+    /** True once a report has been built this process, so it can be exported. */
+    val reportAvailable: Boolean,
 )
 
 /** Phase E1 diagnostics. A PRELOAD decision is only recorded: nothing is ever preloaded. */
@@ -81,6 +96,7 @@ object TraceRuntime {
     private const val TAG = "AdaPreloadTrace"
     private const val TAG_LAYER2 = "AdaPreloadLayer2"
     private const val TAG_SHADOW = "AdaPreloadShadow"
+    private const val TAG_INVENTORY = "AdaPreloadInventory"
     private const val POLL_INTERVAL_MS = 5_000L
     private const val VOCABULARY_ASSET = "lsapp_vocabulary.json"
     private const val MAPPING_ASSET = "package_mapping.tsv"
@@ -116,6 +132,10 @@ object TraceRuntime {
     /** Why Layer 2 could not be opened, and therefore nothing is observed; cleared once it opens. */
     private var layer2Error: String? = null
 
+    // Phase E2a: the latest read-only inventory, held in memory only (no persistence).
+    private var inventoryStatus: InventoryUiStatus? = null
+    private var lastInventoryJson: String? = null
+
     /** The environment of the open observation window (A4), used to classify shadow preload candidates. */
     private var windowEnvironment: EnvironmentSnapshot? = null
     private var lastShadow: ShadowPreloadDecision? = null
@@ -139,6 +159,18 @@ object TraceRuntime {
     fun export(context: Context, uri: Uri) {
         val app = context.applicationContext
         executor.execute { exportTo(app, uri) }
+    }
+
+    /** Phase E2a: run the read-only service warmability scan. Reads PackageManager metadata only. */
+    fun inventoryServices(context: Context) {
+        val app = context.applicationContext
+        executor.execute { runInventory(app) }
+    }
+
+    /** Phase E2a: write the latest inventory as JSON to [uri] (builds a fresh one if none is held). */
+    fun exportInventory(context: Context, uri: Uri) {
+        val app = context.applicationContext
+        executor.execute { exportInventoryTo(app, uri) }
     }
 
     private fun start(app: Context) {
@@ -196,6 +228,42 @@ object TraceRuntime {
         session = null
         pauseReason = null
         store?.let { publishCounts(it, observing = false) }
+    }
+
+    private fun buildInventory(app: Context): ServiceInventoryResult? {
+        val cfg = config(app) ?: return null
+        // Read-only: AndroidPackageServiceSource only calls PackageManager.getPackageInfo.
+        return ServiceWarmabilityInventory.build(cfg.mapping, AndroidPackageServiceSource(app))
+    }
+
+    private fun runInventory(app: Context) {
+        try {
+            val result = buildInventory(app) ?: return publish(app)
+            lastInventoryJson = InventoryReport.json(result)
+            inventoryStatus = InventoryUiStatus(
+                InventoryReport.summary(result), result.warmableAppIds.size, result.installedAppIds.size, reportAvailable = true,
+            )
+            Log.i(TAG_INVENTORY, InventoryReport.text(result))
+            notice = "Service inventory: ${result.warmableAppIds.size} of ${result.installedAppIds.size} " +
+                "installed mapped apps have a candidate service (logcat $TAG_INVENTORY)."
+        } catch (e: Exception) {
+            Log.e(TAG_INVENTORY, "Inventory failed", e)
+            notice = "Inventory failed: ${e.message}"
+        }
+        publish(app)
+    }
+
+    private fun exportInventoryTo(app: Context, uri: Uri) {
+        notice = try {
+            val json = lastInventoryJson ?: InventoryReport.json(buildInventory(app) ?: return publish(app))
+            val out = checkNotNull(app.contentResolver.openOutputStream(uri, "wt")) { "Cannot open $uri" }
+            out.use { it.write(json.toByteArray(Charsets.US_ASCII)) }
+            "Exported service inventory."
+        } catch (e: Exception) {
+            Log.w(TAG_INVENTORY, "Inventory export failed", e)
+            "Inventory export failed: ${e.message}"
+        }
+        publish(app)
     }
 
     private fun exportTo(app: Context, uri: Uri) {
@@ -326,6 +394,7 @@ object TraceRuntime {
             message = listOfNotNull(pauseReason, layer2Error, shadowNotice, notice).joinToString("\n").ifEmpty { null },
             layer2 = layer2,
             shadow = shadow,
+            inventory = inventoryStatus,
         )
         mainHandler.post { status = next }
     }
