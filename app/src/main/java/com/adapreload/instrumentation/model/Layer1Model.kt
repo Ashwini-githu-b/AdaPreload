@@ -21,11 +21,13 @@ data class Layer1Config(
 /**
  * Layer 1 output for one context.
  *
+ * [hidden] is the encoder output at the last real token (dModel entries): the representation the
+ * output layer reads, and the input of the Layer 2 adapter (notebook get_hidden, nb[22] L11-17).
  * [logits] has vocabSize entries (index = app id, index 0 = padding). [probabilities] has
  * vocabSize - 1 entries: softmax over the logits with the padding logit set to -inf, and
  * probabilities[k] is app id k + 1 (notebook nb[33] L152-156).
  */
-class Layer1Prediction(val logits: DoubleArray, val probabilities: DoubleArray) {
+class Layer1Prediction(val hidden: DoubleArray, val logits: DoubleArray, val probabilities: DoubleArray) {
     /** App ids by descending probability; ties keep the lower id first. */
     fun rankedAppIds(): IntArray =
         probabilities.indices.sortedWith(compareByDescending<Int> { probabilities[it] }.thenBy { it })
@@ -83,7 +85,7 @@ class Layer1Model private constructor(
         val probabilities = DoubleArray(config.vocabSize - 1) { StrictMath.exp(logits[it + 1] - max) }
         val sum = probabilities.sum()
         for (k in probabilities.indices) probabilities[k] /= sum
-        return Layer1Prediction(logits, probabilities)
+        return Layer1Prediction(last, logits, probabilities)
     }
 
     private fun realTokens(context: IntArray): IntArray {
