@@ -15,7 +15,13 @@ import com.adapreload.instrumentation.live.PersonalizedTraceStore
 import com.adapreload.instrumentation.live.Reveal
 import com.adapreload.instrumentation.model.Layer1Assets
 import com.adapreload.instrumentation.permission.UsageAccess
+import com.adapreload.instrumentation.shadow.MappingCandidateResolver
+import com.adapreload.instrumentation.shadow.ShadowDecision
+import com.adapreload.instrumentation.shadow.ShadowPolicyConfig
+import com.adapreload.instrumentation.shadow.ShadowPreloadDecision
+import com.adapreload.instrumentation.shadow.ShadowPreloadPolicy
 import com.adapreload.instrumentation.trace.CloseReason
+import com.adapreload.instrumentation.trace.EnvironmentSnapshot
 import com.adapreload.instrumentation.trace.LaunchClassifier
 import com.adapreload.instrumentation.trace.MappingStatus
 import com.adapreload.instrumentation.trace.PackageMapping
@@ -39,6 +45,16 @@ data class TraceUiStatus(
     val message: String? = null,
     /** Layer 2 diagnostics; null until Layer 2 has been opened in this process. */
     val layer2: Layer2UiStatus? = null,
+    /** Phase E1 shadow preload policy; null until Layer 2 has been opened in this process. */
+    val shadow: ShadowUiStatus? = null,
+)
+
+/** Phase E1 diagnostics. A PRELOAD decision is only recorded: nothing is ever preloaded. */
+data class ShadowUiStatus(
+    val config: ShadowPolicyConfig,
+    /** The latest prediction's PRELOAD decision, or else its top-ranked decision. */
+    val last: ShadowPreloadDecision?,
+    val lastAppName: String?,
 )
 
 /** Minimal Layer 2 diagnostics for verifying the live pipeline. */
@@ -64,9 +80,13 @@ data class Layer2UiStatus(
 object TraceRuntime {
     private const val TAG = "AdaPreloadTrace"
     private const val TAG_LAYER2 = "AdaPreloadLayer2"
+    private const val TAG_SHADOW = "AdaPreloadShadow"
     private const val POLL_INTERVAL_MS = 5_000L
     private const val VOCABULARY_ASSET = "lsapp_vocabulary.json"
     private const val MAPPING_ASSET = "package_mapping.tsv"
+
+    /** Phase E1 policy; see docs/PHASE_E1_SHADOW_PRELOAD.md. */
+    private val SHADOW_POLICY = ShadowPolicyConfig.DEFAULT
 
     private val executor = Executors.newSingleThreadScheduledExecutor { Thread(it, "adapreload-trace") }
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -95,6 +115,11 @@ object TraceRuntime {
 
     /** Why Layer 2 could not be opened, and therefore nothing is observed; cleared once it opens. */
     private var layer2Error: String? = null
+
+    /** The environment of the open observation window (A4), used to classify shadow preload candidates. */
+    private var windowEnvironment: EnvironmentSnapshot? = null
+    private var lastShadow: ShadowPreloadDecision? = null
+    private var shadowFailures = 0
 
     fun startCollection(context: Context) {
         val app = context.applicationContext
@@ -134,7 +159,9 @@ object TraceRuntime {
                 if (s.openWindowId != null && !UsageAccess.isGranted(app)) s.closeWindow(CloseReason.USAGE_ACCESS_LOST)
             } else {
                 if (s.openWindowId == null) {
-                    s.openWindow(env.windowInfo(System.currentTimeMillis(), cfg.mapping.sha256, cfg.vocabulary.appsSha256))
+                    val info = env.windowInfo(System.currentTimeMillis(), cfg.mapping.sha256, cfg.vocabulary.appsSha256)
+                    s.openWindow(info)
+                    windowEnvironment = info.environment
                 }
                 s.poll(env::hasLauncherEntry)
             }
@@ -217,7 +244,24 @@ object TraceRuntime {
             val personalizer = LivePersonalizer.open(store, Layer1Assets.load(app), cfg.vocabulary.appsSha256)
             Log.i(TAG_LAYER2, "Layer 2 opened: ${personalizer.updateCount} updates, pending after launch ${personalizer.pendingPrediction?.position}")
             layer2Error = null
-            PersonalizedTraceStore(store, personalizer, ::logLayer2).also { liveStore = it }
+            // Phase E1: decisions only. The resolver queries package metadata; nothing is launched.
+            val resolver = MappingCandidateResolver(
+                cfg.mapping,
+                cfg.vocabulary.appCount,
+                environment = { checkNotNull(windowEnvironment) { "No observation window" } },
+                hasLauncherEntry = { pkg -> checkNotNull(environment) { "No environment" }.hasLauncherEntry(pkg) },
+            )
+            PersonalizedTraceStore(
+                store,
+                personalizer,
+                onCommitted = ::logLayer2,
+                shadowPolicy = ShadowPreloadPolicy(SHADOW_POLICY, resolver),
+                onShadowDecisions = { logShadow(it, cfg.vocabulary) },
+                onShadowFailure = { e ->
+                    shadowFailures++
+                    Log.w(TAG_SHADOW, "Shadow decisions dropped for a batch (Layer 2 work committed)", e)
+                },
+            ).also { liveStore = it }
         } catch (e: Exception) {
             // Observing without Layer 2 would let the trace and the adapter diverge.
             Log.e(TAG_LAYER2, "Layer 2 cannot start", e)
@@ -232,6 +276,23 @@ object TraceRuntime {
                 String.format(Locale.ROOT, "revealed #%d (L1 rank %d, L2 rank %d, loss %.4f)", it.predictionPosition, it.layer1Rank, it.layer2Rank, it.loss)
             } ?: "nothing to reveal"
             Log.i(TAG_LAYER2, "launch #${e.sequencePosition} app ${e.appId}: $reveal; updates ${e.updateCount}; next L1 top-1 ${e.layer1Top1}, L2 top-1 ${e.layer2Top1}")
+        }
+    }
+
+    private fun logShadow(decisions: List<ShadowPreloadDecision>, vocabulary: Vocabulary) {
+        for (d in decisions) {
+            val verdict = if (d.decision == ShadowDecision.PRELOAD) "PRELOAD" else "SKIP reason=${d.reasonLabel}"
+            Log.i(
+                TAG_SHADOW,
+                String.format(
+                    Locale.ROOT, "prediction #%d (after app %d): rank %d app %d %s [%s] p=%.3f -> %s; actual preload: NONE (shadow mode)",
+                    d.predictionPosition, d.currentAppId, d.rank, d.appId, vocabulary.nameOf(d.appId), d.packageName ?: "-",
+                    d.probability, verdict,
+                ),
+            )
+        }
+        decisions.groupBy { it.predictionPosition }.maxByOrNull { it.key }?.value?.let { last ->
+            lastShadow = last.firstOrNull { it.decision == ShadowDecision.PRELOAD } ?: last.first()
         }
     }
 
@@ -252,13 +313,19 @@ object TraceRuntime {
                 nextLayer2Top1 = last?.let { vocabulary?.nameOf(it.layer2Top1) },
             )
         }
+        val shadow = liveStore?.let {
+            ShadowUiStatus(SHADOW_POLICY, lastShadow, lastShadow?.let { d -> vocabulary?.nameOf(d.appId) })
+        }
+        // Batches whose decisions could not be computed (their Layer 2 work was still committed).
+        val shadowNotice = if (shadowFailures > 0) "Shadow decisions dropped for $shadowFailures batches (logcat $TAG_SHADOW)." else null
         val next = TraceUiStatus(
             observing = observing,
             counts = store.counts(),
             mappedPackages = mapping?.entries?.count { it.status == MappingStatus.MAPPED } ?: 0,
             ambiguousPackages = mapping?.entries?.count { it.status == MappingStatus.AMBIGUOUS } ?: 0,
-            message = listOfNotNull(pauseReason, layer2Error, notice).joinToString("\n").ifEmpty { null },
+            message = listOfNotNull(pauseReason, layer2Error, shadowNotice, notice).joinToString("\n").ifEmpty { null },
             layer2 = layer2,
+            shadow = shadow,
         )
         mainHandler.post { status = next }
     }

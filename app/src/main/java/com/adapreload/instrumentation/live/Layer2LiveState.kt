@@ -1,5 +1,7 @@
 package com.adapreload.instrumentation.live
 
+import com.adapreload.instrumentation.shadow.ShadowDecisionRecord
+import com.adapreload.instrumentation.shadow.ShadowPreloadDecision
 import com.adapreload.instrumentation.trace.TraceRecord
 import com.adapreload.instrumentation.trace.TraceStore
 import java.io.ByteArrayInputStream
@@ -77,11 +79,25 @@ interface Layer2Store : TraceStore {
     /** App ids of the last [limit] APPENDED launches, oldest first. */
     fun recentLaunches(limit: Int): List<Int>
 
-    /** Appends the records, advances the cursor, replaces the Layer 2 state and appends its log, all in one transaction. */
-    fun commitBatch(records: List<TraceRecord>, cursorMs: Long, polledAtMs: Long, layer2: Layer2Commit)
+    /**
+     * Appends the records, advances the cursor, replaces the Layer 2 state and appends its log, all
+     * in one transaction. Phase E1: the same transaction also appends the [shadow] preload decisions
+     * made for the batch's predictions (decided at [polledAtMs]) and records each revealed launch as
+     * the actual app of the decisions for the prediction it revealed.
+     */
+    fun commitBatch(
+        records: List<TraceRecord>,
+        cursorMs: Long,
+        polledAtMs: Long,
+        layer2: Layer2Commit,
+        shadow: List<ShadowPreloadDecision> = emptyList(),
+    )
 
     /** The latest Layer 2 log entry, if any. */
     fun lastLayer2Log(): Layer2LogEntry?
+
+    /** Every persisted shadow preload decision, by prediction position and rank. */
+    fun shadowDecisions(): List<ShadowDecisionRecord>
 }
 
 /**

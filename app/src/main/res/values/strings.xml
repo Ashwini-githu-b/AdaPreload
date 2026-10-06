@@ -60,4 +60,12 @@
     <string name="layer2_last_reveal_value">#%1$d: L1 rank %2$d, L2 rank %3$d</string>
     <string name="layer2_next">Next app, top-1 (L1 / L2)</string>
     <string name="layer2_next_value">%1$s / %2$s</string>
+
+    <!-- Phase E1 shadow preload policy: decisions are recorded, nothing is preloaded -->
+    <string name="shadow_policy">Shadow preload policy</string>
+    <string name="shadow_policy_on">On: p ≥ %1$s, max candidates %2$d, max rank %3$d. Decisions only, nothing is preloaded.</string>
+    <string name="shadow_policy_off">Off</string>
+    <string name="shadow_last_decision">Last shadow decision</string>
+    <string name="shadow_last_preload">#%1$d %2$s, rank %3$d, p=%4$s: PRELOAD (not executed)</string>
+    <string name="shadow_last_skip">#%1$d %2$s, rank %3$d, p=%4$s: SKIP (%5$s)</string>
 </resources>

@@ -18,9 +18,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.adapreload.instrumentation.R
 import com.adapreload.instrumentation.collect.TraceUiStatus
+import com.adapreload.instrumentation.shadow.ShadowDecision
 import com.adapreload.instrumentation.trace.Classification
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
 
 /** Status and debug view of trace collection and the live Layer 2 adapter. */
 @Composable
@@ -91,6 +93,32 @@ fun TraceCard(trace: TraceUiStatus, onExport: () -> Unit) {
                 if (l2?.nextLayer1Top1 != null && l2.nextLayer2Top1 != null) {
                     stringResource(R.string.layer2_next_value, l2.nextLayer1Top1, l2.nextLayer2Top1)
                 } else none
+            )
+            val shadow = trace.shadow
+            StatRow(
+                R.string.shadow_policy,
+                when {
+                    shadow == null -> none
+                    shadow.config.enabled -> stringResource(
+                        R.string.shadow_policy_on,
+                        String.format(Locale.ROOT, "%.2f", shadow.config.minProbability),
+                        shadow.config.maxCandidates,
+                        shadow.config.maxRank,
+                    )
+                    else -> stringResource(R.string.shadow_policy_off)
+                }
+            )
+            StatRow(
+                R.string.shadow_last_decision,
+                shadow?.last?.let { d ->
+                    val p = String.format(Locale.ROOT, "%.2f", d.probability)
+                    val name = shadow.lastAppName ?: d.appId.toString()
+                    if (d.decision == ShadowDecision.PRELOAD) {
+                        stringResource(R.string.shadow_last_preload, d.predictionPosition, name, d.rank, p)
+                    } else {
+                        stringResource(R.string.shadow_last_skip, d.predictionPosition, name, d.rank, p, d.reasonLabel)
+                    }
+                } ?: none
             )
             trace.message?.let {
                 Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
