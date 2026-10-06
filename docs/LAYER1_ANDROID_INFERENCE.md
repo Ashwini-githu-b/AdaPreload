@@ -119,10 +119,30 @@ an error of 0.098, so the test detects architectural mistakes.
 | Top-1 / top-5 (16 golden cases) | 16/16 and 16/16 |
 | Colab sample (256 events) | max abs error 3.5e-7, mean 1.1e-8; top-1 256/256, top-5 256/256, top-20 256/256 |
 
-On a device, `Layer1ParityInstrumentedTest` loads the model through `Layer1Assets` from the app
-assets and applies the same comparisons and tolerances. Run it from Android Studio. It has been
-compiled here but not yet run on a device; because the arithmetic uses `StrictMath`, its results
-should be bit-identical to the JVM test.
+### On-device test (`Layer1ParityInstrumentedTest`)
+
+The test loads the model through `Layer1Assets` from the app assets and uses the same tolerance
+constants as the JVM test. It is one test method that asserts:
+- **for all 16 golden cases:** output size 87; |Σp − 1|; the fp64 and fp32 bounds on
+  probabilities and logits; top-1 and ordered top-5 match;
+- **for all 256 Colab sample events:** max abs error ≤ 5e-6 at the Colab top-20 ids; top-1 and
+  ordered top-5 match for every event.
+
+Unlike the JVM test, it does **not** assert:
+- the Colab comparison of the 9 golden cases taken from the artifact;
+- top-20 order;
+- the coverage and sample-size checks.
+
+Those values are computed but only written to logcat (tag `Layer1Parity`) together with the
+measured errors. The test report records pass or fail only.
+
+**Device run, 2026-10-06 (reported by the project lead):**
+- Command: `./gradlew :app:connectedDebugAndroidTest`.
+- Devices: Motorola edge 50 fusion (Android 16 / API 36), and an API 35 emulator.
+- Result: BUILD SUCCESSFUL. This task fails if any instrumented test fails on any device.
+- The per-device report files and the logcat output were not reviewed for this record, so **no
+  device-measured error values are recorded here.** The device result is that every assertion
+  above passed under the stated tolerances.
 
 ## Reproducing
 
