@@ -11,6 +11,12 @@ import com.adapreload.instrumentation.live.Layer2State
 import com.adapreload.instrumentation.live.Layer2StateCodec
 import com.adapreload.instrumentation.live.Layer2Store
 import com.adapreload.instrumentation.live.Reveal
+import com.adapreload.instrumentation.shadow.DecisionReason
+import com.adapreload.instrumentation.shadow.Eligibility
+import com.adapreload.instrumentation.shadow.ShadowDecision
+import com.adapreload.instrumentation.shadow.ShadowDecisionRecord
+import com.adapreload.instrumentation.shadow.ShadowPolicyConfig
+import com.adapreload.instrumentation.shadow.ShadowPreloadDecision
 import com.adapreload.instrumentation.trace.Classification
 import com.adapreload.instrumentation.trace.CloseReason
 import com.adapreload.instrumentation.trace.EnvironmentSnapshot
@@ -33,6 +39,9 @@ import com.adapreload.instrumentation.trace.WindowInfo
  * Phase D2 (schema version 2) adds the Layer 2 state and log. They are written in the same
  * transaction as the batch whose launches changed them, so the trace and Layer 2 can never
  * disagree about which launches were processed.
+ *
+ * Phase E1 (schema version 3) adds the shadow preload decisions, also written in that
+ * transaction. Upgrades only add tables; existing rows are never changed.
  */
 class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
     SQLiteOpenHelper(context, databaseName, null, DB_VERSION), Layer2Store {
@@ -73,12 +82,40 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
         db.execSQL("CREATE UNIQUE INDEX events_sequence ON events(sequence_position) WHERE outcome = 'APPENDED'")
         db.execSQL("CREATE TABLE state (key TEXT PRIMARY KEY, value INTEGER NOT NULL)")
         createLayer2Tables(db)
+        createShadowTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Version 1 is the Phase B schema; version 2 only adds the Layer 2 tables.
-        check(oldVersion == 1 && newVersion == 2) { "No schema migration defined (version $oldVersion → $newVersion)" }
-        createLayer2Tables(db)
+        // Version 1 is the Phase B schema; version 2 adds the Layer 2 tables; version 3 adds the shadow decisions.
+        check(oldVersion in 1..2 && newVersion == 3) { "No schema migration defined (version $oldVersion → $newVersion)" }
+        if (oldVersion < 2) createLayer2Tables(db)
+        createShadowTables(db)
+    }
+
+    private fun createShadowTables(db: SQLiteDatabase) {
+        // One row per examined candidate of a prediction; the key forbids deciding a candidate twice.
+        // actual_app_id is filled when the next launch reveals the prediction.
+        db.execSQL(
+            """CREATE TABLE shadow_decisions (
+                prediction_position INTEGER NOT NULL,
+                rank INTEGER NOT NULL,
+                app_id INTEGER NOT NULL,
+                package TEXT,
+                probability REAL NOT NULL,
+                eligibility TEXT NOT NULL,
+                decision TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                current_app_id INTEGER NOT NULL,
+                decided_at_ms INTEGER NOT NULL,
+                actual_app_id INTEGER,
+                policy_version TEXT NOT NULL,
+                policy_enabled INTEGER NOT NULL,
+                min_probability REAL NOT NULL,
+                max_candidates INTEGER NOT NULL,
+                max_rank INTEGER NOT NULL,
+                exclude_current_app INTEGER NOT NULL,
+                PRIMARY KEY (prediction_position, rank))"""
+        )
     }
 
     private fun createLayer2Tables(db: SQLiteDatabase) {
@@ -150,7 +187,13 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
         writableDatabase.inTransaction { writeBatch(records, cursorMs, polledAtMs) }
     }
 
-    override fun commitBatch(records: List<TraceRecord>, cursorMs: Long, polledAtMs: Long, layer2: Layer2Commit) {
+    override fun commitBatch(
+        records: List<TraceRecord>,
+        cursorMs: Long,
+        polledAtMs: Long,
+        layer2: Layer2Commit,
+        shadow: List<ShadowPreloadDecision>,
+    ) {
         writableDatabase.inTransaction {
             writeBatch(records, cursorMs, polledAtMs)
             insertWithOnConflict("layer2_state", null, ContentValues().apply {
@@ -170,8 +213,63 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
                     put("layer2_top1", e.layer2Top1)
                 })
             }
+            for (d in shadow) {
+                insertOrThrow("shadow_decisions", null, ContentValues().apply {
+                    put("prediction_position", d.predictionPosition)
+                    put("rank", d.rank)
+                    put("app_id", d.appId)
+                    put("package", d.packageName)
+                    put("probability", d.probability)
+                    put("eligibility", d.eligibility.name)
+                    put("decision", d.decision.name)
+                    put("reason", d.reason.name)
+                    put("current_app_id", d.currentAppId)
+                    put("decided_at_ms", polledAtMs)
+                    put("policy_version", ShadowPolicyConfig.VERSION)
+                    put("policy_enabled", if (d.config.enabled) 1 else 0)
+                    put("min_probability", d.config.minProbability)
+                    put("max_candidates", d.config.maxCandidates)
+                    put("max_rank", d.config.maxRank)
+                    put("exclude_current_app", if (d.config.excludeCurrentApp) 1 else 0)
+                })
+            }
+            // Each revealed launch is the actual next app of the prediction it revealed.
+            for (e in layer2.log) {
+                val reveal = e.reveal ?: continue
+                update("shadow_decisions", ContentValues().apply { put("actual_app_id", e.appId) },
+                    "prediction_position = ?", arrayOf(reveal.predictionPosition.toString()))
+            }
         }
     }
+
+    override fun shadowDecisions(): List<ShadowDecisionRecord> =
+        readableDatabase.rawQuery("SELECT * FROM shadow_decisions ORDER BY prediction_position, rank", null).use { c ->
+            c.map { r ->
+                val config = ShadowPolicyConfig(
+                    enabled = r.long("policy_enabled") == 1L,
+                    maxCandidates = r.long("max_candidates")!!.toInt(),
+                    maxRank = r.long("max_rank")!!.toInt(),
+                    minProbability = r.getDouble(r.getColumnIndexOrThrow("min_probability")),
+                    excludeCurrentApp = r.long("exclude_current_app") == 1L,
+                )
+                ShadowDecisionRecord(
+                    decision = ShadowPreloadDecision(
+                        predictionPosition = r.long("prediction_position")!!.toInt(),
+                        currentAppId = r.long("current_app_id")!!.toInt(),
+                        rank = r.long("rank")!!.toInt(),
+                        appId = r.long("app_id")!!.toInt(),
+                        packageName = r.string("package"),
+                        probability = r.getDouble(r.getColumnIndexOrThrow("probability")),
+                        eligibility = Eligibility.valueOf(r.string("eligibility")!!),
+                        decision = ShadowDecision.valueOf(r.string("decision")!!),
+                        reason = DecisionReason.valueOf(r.string("reason")!!),
+                        config = config,
+                    ),
+                    decidedAtMs = r.long("decided_at_ms")!!,
+                    actualAppId = r.long("actual_app_id")?.toInt(),
+                )
+            }
+        }
 
     override fun loadLayer2(): Layer2State? =
         readableDatabase.rawQuery("SELECT state FROM layer2_state WHERE id = 1", null).use {
@@ -318,7 +416,7 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
 
     companion object {
         const val DB_NAME = "adapreload_trace.db"
-        private const val DB_VERSION = 2
+        private const val DB_VERSION = 3
         private const val KEY_CURSOR = "cursor_ms"
         private const val KEY_OPEN_WINDOW = "open_window_id"
         private const val KEY_EXPERIMENT_START = "experiment_start_ms"

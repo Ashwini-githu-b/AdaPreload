@@ -560,6 +560,9 @@ preload actions, K selection and prediction UI.
 **Phase D/D2:** the Layer 2 adapter is in `docs/LAYER2_ANDROID_ADAPTER.md`. Its live connection to
 this trace, persisted in the same transaction as each batch, is in `docs/LAYER2_LIVE_INTEGRATION.md`.
 
+**Phase E1:** the shadow preload policy (decisions only, nothing is preloaded, consistent with A10)
+is in `docs/PHASE_E1_SHADOW_PRELOAD.md`.
+
 ---
 
 ## Appendix: vocabulary from the public-LSApp re-run (NON-AUTHORITATIVE)

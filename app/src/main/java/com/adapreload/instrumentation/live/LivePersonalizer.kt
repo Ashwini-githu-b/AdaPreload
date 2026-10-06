@@ -3,8 +3,12 @@ package com.adapreload.instrumentation.live
 import com.adapreload.instrumentation.model.Layer1Model
 import com.adapreload.instrumentation.model.Layer2Adapter
 import com.adapreload.instrumentation.model.Layer2OnlineLearner
+import com.adapreload.instrumentation.model.Layer2Prediction
 import com.adapreload.instrumentation.model.hiddenFp32
 import com.adapreload.instrumentation.model.logitsFp32
+import com.adapreload.instrumentation.shadow.ShadowPolicyInput
+import com.adapreload.instrumentation.shadow.ShadowPreloadDecision
+import com.adapreload.instrumentation.shadow.ShadowPreloadPolicy
 import com.adapreload.instrumentation.trace.Outcome
 import com.adapreload.instrumentation.trace.TraceRecord
 import com.adapreload.instrumentation.trace.TraceStore
@@ -36,6 +40,8 @@ class LivePersonalizer private constructor(
     /** Layer 2 work for one batch, not yet current. */
     class Step internal constructor(
         val commit: Layer2Commit,
+        /** Every prediction made for this batch, in sequence order; the last one is the new pending prediction. */
+        val predictions: List<PendingPrediction>,
         internal val basePosition: Int?,
         internal val adapter: Layer2Adapter,
         internal val recent: List<Int>,
@@ -66,6 +72,7 @@ class LivePersonalizer private constructor(
         }
         var context = recent
         val log = ArrayList<Layer2LogEntry>(launches.size)
+        val predictions = ArrayList<PendingPrediction>(launches.size)
         for (r in launches) {
             val position = checkNotNull(r.sequencePosition)
             val appId = checkNotNull(r.appId)
@@ -85,10 +92,11 @@ class LivePersonalizer private constructor(
             val logits = l1.logitsFp32()
             val prediction = learner.predict(hidden, logits)
             p = PendingPrediction(position, context.toIntArray(), hidden, logits, prediction.finalLogits)
+            predictions += p
             log += Layer2LogEntry(position, appId, reveal, learner.adapter.updateCount, top1(logits), top1(prediction.finalLogits))
         }
         val state = Layer2State(identity, learner.adapter.weightSnapshot(), learner.adapter.biasSnapshot(), learner.adapter.updateCount, p)
-        return Step(Layer2Commit(state, log), pending?.position, learner.adapter, context)
+        return Step(Layer2Commit(state, log), predictions, pending?.position, learner.adapter, context)
     }
 
     /** Makes a prepared step current, after its commit succeeded. */
@@ -158,11 +166,19 @@ class LivePersonalizer private constructor(
  * The trace store used while Layer 2 runs. Each batch is committed together with the Layer 2
  * work it causes in one transaction; the learner only advances once that commit succeeded.
  * A batch without an APPENDED launch is committed exactly as in Phase B.
+ *
+ * Phase E1: with a [shadowPolicy], each prediction made for the batch is also turned into shadow
+ * preload decisions, committed in the same transaction. The decisions are computed from the
+ * finished predictions and never feed back into Layer 2; a failure of the policy only drops the
+ * batch's decisions (reported to [onShadowFailure]) and never blocks or changes the Layer 2 work.
  */
 class PersonalizedTraceStore(
     private val inner: Layer2Store,
     val personalizer: LivePersonalizer,
     private val onCommitted: (List<Layer2LogEntry>) -> Unit = {},
+    private val shadowPolicy: ShadowPreloadPolicy? = null,
+    private val onShadowDecisions: (List<ShadowPreloadDecision>) -> Unit = {},
+    private val onShadowFailure: (Exception) -> Unit = {},
 ) : TraceStore by inner {
     override fun commitBatch(records: List<TraceRecord>, cursorMs: Long, polledAtMs: Long) {
         val step = personalizer.prepare(records)
@@ -170,9 +186,25 @@ class PersonalizedTraceStore(
             inner.commitBatch(records, cursorMs, polledAtMs)
             return
         }
-        inner.commitBatch(records, cursorMs, polledAtMs, step.commit)
+        val decisions = shadowDecisions(step)
+        inner.commitBatch(records, cursorMs, polledAtMs, step.commit, decisions)
         personalizer.accept(step)
         // Diagnostics only: the batch is committed, so a failure here must not fail the poll.
         runCatching { onCommitted(step.commit.log) }
+        runCatching { onShadowDecisions(decisions) }
+    }
+
+    private fun shadowDecisions(step: LivePersonalizer.Step): List<ShadowPreloadDecision> {
+        val policy = shadowPolicy ?: return emptyList()
+        return try {
+            step.predictions.flatMap { p ->
+                // The pending prediction's update count equals its position (D2 invariant).
+                val probabilities = Layer2Prediction(p.finalLogits, p.position.toLong()).probabilities
+                policy.decide(ShadowPolicyInput(p.position, p.context.last(), probabilities))
+            }
+        } catch (e: Exception) {
+            runCatching { onShadowFailure(e) }
+            emptyList()
+        }
     }
 }

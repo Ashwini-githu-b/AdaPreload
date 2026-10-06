@@ -148,6 +148,16 @@ computed directly with `Layer2OnlineLearner`.
 - An actual kill in the middle of a transaction is not simulated. Its outcome (committed or not)
   is exactly the D12 (b) or (c) case.
 
+## Status
+
+- **Implementation:** complete (`f9edd0a`).
+- **Manual validation:** done on the Motorola edge 50 fusion with a fresh sequence, as reported by
+  the project lead.
+- **Still open:** a recorded on-device run of `Layer2SqliteStoreTest` against `f9edd0a`. See
+  `docs/PHASE_E1_SHADOW_PRELOAD.md` for the safe command.
+- **Phase E1** (schema version 3) adds `shadow_decisions` to the same transaction. Nothing in this
+  document's D2 behavior changes.
+
 ## Not in D2
 
 - No on-device live run yet.
