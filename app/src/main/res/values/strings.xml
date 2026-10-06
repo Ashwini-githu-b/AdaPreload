@@ -9,7 +9,7 @@
 
     <!-- Setup screen -->
     <string name="android_version">Android %1$s (API %2$d)</string>
-    <string name="scope_note">Phase B: app launches are observed and recorded while the service runs. No predictions are made, and no other app is launched or preloaded.</string>
+    <string name="scope_note">Phase D: app launches are observed and recorded while the service runs. After each launch, Layer 1 and the on-device Layer 2 adapter predict the next app, and the adapter learns from the launch that follows. No other app is launched or preloaded.</string>
 
     <string name="usage_access_title">Usage access</string>
     <string name="usage_access_granted">Granted</string>
@@ -51,4 +51,13 @@
     <string name="trace_last_poll">Last poll</string>
     <string name="trace_none">-</string>
     <string name="trace_export">Export trace (JSON)</string>
+
+    <!-- Layer 2 diagnostics (Phase D2) -->
+    <string name="layer2_updates">Layer 2 updates</string>
+    <string name="layer2_last_launch">Last launch processed</string>
+    <string name="layer2_last_launch_value">#%1$d</string>
+    <string name="layer2_last_reveal">Revealed prediction</string>
+    <string name="layer2_last_reveal_value">#%1$d: L1 rank %2$d, L2 rank %3$d</string>
+    <string name="layer2_next">Next app, top-1 (L1 / L2)</string>
+    <string name="layer2_next_value">%1$s / %2$s</string>
 </resources>

@@ -193,34 +193,11 @@ python3 tools/make_layer2_golden.py layer1_backbone_final.pt
 ./gradlew :app:testDebugUnitTest --tests '*Layer2AdapterTest*' --tests '*Layer1ParityTest*'
 ```
 
-## Not in this iteration (open before live integration)
+## Follow-up
 
-1. **Persistence.**
-   - W, b, `updateCount` and the pending prediction (its hidden and backbone logits) are in memory
-     only.
-   - They need to be stored atomically with the trace cursor and the appended records. Otherwise
-     a crash between "record appended" and "adapter updated" would skip an update or apply it
-     twice.
-   - That also needs a format (raw FP32 little-endian plus a hash) and a version and checkpoint
-     check on load.
-2. **Live hook.** The planned point is `TraceRuntime` after `commitBatch`. For each newly APPENDED
-   launch, in order:
-   1. `reveal(appId)` for the pending prediction;
-   2. Layer 1 on the last ≤ 20 retained ids;
-   3. `predict` → pending.
+Live trace integration and atomic persistence (the first three items previously listed as open)
+are done in Phase D2: see `docs/LAYER2_LIVE_INTEGRATION.md`.
 
-   Still to decide:
-   - COLLAPSED events cause no update (T3);
-   - the first launch after the start has nothing to reveal;
-   - what to do with several launches in one poll batch (process strictly in order);
-   - the threading (the trace executor).
-3. **Gaps and restarts.**
-   - A7 says the state continues across gaps and service restarts, with no reset and no backfill.
-   - Whether a prediction left pending across a gap is revealed by the next launch (as the
-     continuous sequence implies) should be confirmed explicitly.
-4. **On-device run of these tests.**
-   - The adapter is pure Kotlin with `StrictMath`, so ART should give bit-identical results.
-   - There is no instrumented Layer 2 test yet. The fixture is already in `androidTest/assets` for
-     one.
-5. **Logging and evaluation fields**: the prediction records and losses to export. This is Phase E
-   scope, and not started.
+Still open:
+- an on-device run of these parity tests (there is no instrumented Layer 2 parity test);
+- the logging and evaluation fields (Phase E).

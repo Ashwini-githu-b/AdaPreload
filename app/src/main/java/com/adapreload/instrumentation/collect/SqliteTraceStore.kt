@@ -5,6 +5,12 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.adapreload.instrumentation.live.Layer2Commit
+import com.adapreload.instrumentation.live.Layer2LogEntry
+import com.adapreload.instrumentation.live.Layer2State
+import com.adapreload.instrumentation.live.Layer2StateCodec
+import com.adapreload.instrumentation.live.Layer2Store
+import com.adapreload.instrumentation.live.Reveal
 import com.adapreload.instrumentation.trace.Classification
 import com.adapreload.instrumentation.trace.CloseReason
 import com.adapreload.instrumentation.trace.EnvironmentSnapshot
@@ -17,16 +23,19 @@ import com.adapreload.instrumentation.trace.TraceCounts
 import com.adapreload.instrumentation.trace.TraceRecord
 import com.adapreload.instrumentation.trace.TraceSnapshot
 import com.adapreload.instrumentation.trace.TraceState
-import com.adapreload.instrumentation.trace.TraceStore
 import com.adapreload.instrumentation.trace.WindowInfo
 
 /**
  * SQLite persistence for the trace. The events table is the single source of truth for the
  * sequence: the sequence state is derived from it on load, and every batch of records is
  * committed together with the new cursor, so processing is exactly-once across restarts.
+ *
+ * Phase D2 (schema version 2) adds the Layer 2 state and log. They are written in the same
+ * transaction as the batch whose launches changed them, so the trace and Layer 2 can never
+ * disagree about which launches were processed.
  */
 class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
-    SQLiteOpenHelper(context, databaseName, null, DB_VERSION), TraceStore {
+    SQLiteOpenHelper(context, databaseName, null, DB_VERSION), Layer2Store {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -63,10 +72,31 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
         )
         db.execSQL("CREATE UNIQUE INDEX events_sequence ON events(sequence_position) WHERE outcome = 'APPENDED'")
         db.execSQL("CREATE TABLE state (key TEXT PRIMARY KEY, value INTEGER NOT NULL)")
+        createLayer2Tables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        error("No schema migrations defined (version $oldVersion → $newVersion)")
+        // Version 1 is the Phase B schema; version 2 only adds the Layer 2 tables.
+        check(oldVersion == 1 && newVersion == 2) { "No schema migration defined (version $oldVersion → $newVersion)" }
+        createLayer2Tables(db)
+    }
+
+    private fun createLayer2Tables(db: SQLiteDatabase) {
+        // One row: the Layer 2 state in Layer2StateCodec form (versioned, with its own SHA-256).
+        db.execSQL("CREATE TABLE layer2_state (id INTEGER PRIMARY KEY CHECK (id = 1), state BLOB NOT NULL)")
+        // One row per APPENDED launch processed by Layer 2; the key forbids a second prediction for a launch.
+        db.execSQL(
+            """CREATE TABLE layer2_log (
+                sequence_position INTEGER PRIMARY KEY,
+                app_id INTEGER NOT NULL,
+                revealed_position INTEGER,
+                layer1_rank INTEGER,
+                layer2_rank INTEGER,
+                loss REAL,
+                update_count INTEGER NOT NULL,
+                layer1_top1 INTEGER NOT NULL,
+                layer2_top1 INTEGER NOT NULL)"""
+        )
     }
 
     override fun loadState(): PersistedState {
@@ -117,26 +147,77 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
     }
 
     override fun commitBatch(records: List<TraceRecord>, cursorMs: Long, polledAtMs: Long) {
+        writableDatabase.inTransaction { writeBatch(records, cursorMs, polledAtMs) }
+    }
+
+    override fun commitBatch(records: List<TraceRecord>, cursorMs: Long, polledAtMs: Long, layer2: Layer2Commit) {
         writableDatabase.inTransaction {
-            for (r in records) {
-                insertOrThrow("events", null, ContentValues().apply {
-                    put("window_id", r.windowId)
-                    put("observed_at_ms", r.observedAtMs)
-                    put("timestamp_ms", r.event.timestampMs)
-                    put("event_type", r.event.eventType)
-                    put("package", r.event.packageName)
-                    put("class_name", r.event.className)
-                    put("outcome", r.outcome.name)
-                    put("classification", r.classification?.name)
-                    put("app_id", r.appId)
-                    put("lsapp_name", r.lsappName)
-                    put("sequence_position", r.sequencePosition)
-                    put("timestamp_anomaly", if (r.timestampAnomaly) 1 else 0)
+            writeBatch(records, cursorMs, polledAtMs)
+            insertWithOnConflict("layer2_state", null, ContentValues().apply {
+                put("id", 1)
+                put("state", Layer2StateCodec.encode(layer2.state))
+            }, SQLiteDatabase.CONFLICT_REPLACE)
+            for (e in layer2.log) {
+                insertOrThrow("layer2_log", null, ContentValues().apply {
+                    put("sequence_position", e.sequencePosition)
+                    put("app_id", e.appId)
+                    put("revealed_position", e.reveal?.predictionPosition)
+                    put("layer1_rank", e.reveal?.layer1Rank)
+                    put("layer2_rank", e.reveal?.layer2Rank)
+                    put("loss", e.reveal?.loss)
+                    put("update_count", e.updateCount)
+                    put("layer1_top1", e.layer1Top1)
+                    put("layer2_top1", e.layer2Top1)
                 })
             }
-            setState(KEY_CURSOR, cursorMs)
-            setState(KEY_LAST_POLL, polledAtMs)
         }
+    }
+
+    override fun loadLayer2(): Layer2State? =
+        readableDatabase.rawQuery("SELECT state FROM layer2_state WHERE id = 1", null).use {
+            if (it.moveToFirst()) Layer2StateCodec.decode(it.getBlob(0)) else null
+        }
+
+    override fun recentLaunches(limit: Int): List<Int> =
+        readableDatabase.rawQuery(
+            "SELECT app_id FROM events WHERE outcome = 'APPENDED' ORDER BY sequence_position DESC LIMIT $limit", null,
+        ).use { c -> c.map { it.long("app_id")!!.toInt() } }.reversed()
+
+    override fun lastLayer2Log(): Layer2LogEntry? =
+        readableDatabase.rawQuery("SELECT * FROM layer2_log ORDER BY sequence_position DESC LIMIT 1", null).use { c ->
+            c.map { r ->
+                Layer2LogEntry(
+                    sequencePosition = r.long("sequence_position")!!.toInt(),
+                    appId = r.long("app_id")!!.toInt(),
+                    reveal = r.long("revealed_position")?.let { position ->
+                        Reveal(position.toInt(), r.long("layer1_rank")!!.toInt(), r.long("layer2_rank")!!.toInt(), r.getDouble(r.getColumnIndexOrThrow("loss")))
+                    },
+                    updateCount = r.long("update_count")!!,
+                    layer1Top1 = r.long("layer1_top1")!!.toInt(),
+                    layer2Top1 = r.long("layer2_top1")!!.toInt(),
+                )
+            }.firstOrNull()
+        }
+
+    private fun SQLiteDatabase.writeBatch(records: List<TraceRecord>, cursorMs: Long, polledAtMs: Long) {
+        for (r in records) {
+            insertOrThrow("events", null, ContentValues().apply {
+                put("window_id", r.windowId)
+                put("observed_at_ms", r.observedAtMs)
+                put("timestamp_ms", r.event.timestampMs)
+                put("event_type", r.event.eventType)
+                put("package", r.event.packageName)
+                put("class_name", r.event.className)
+                put("outcome", r.outcome.name)
+                put("classification", r.classification?.name)
+                put("app_id", r.appId)
+                put("lsapp_name", r.lsappName)
+                put("sequence_position", r.sequencePosition)
+                put("timestamp_anomaly", if (r.timestampAnomaly) 1 else 0)
+            })
+        }
+        setState(KEY_CURSOR, cursorMs)
+        setState(KEY_LAST_POLL, polledAtMs)
     }
 
     override fun snapshot(): TraceSnapshot {
@@ -237,7 +318,7 @@ class SqliteTraceStore(context: Context, databaseName: String = DB_NAME) :
 
     companion object {
         const val DB_NAME = "adapreload_trace.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2
         private const val KEY_CURSOR = "cursor_ms"
         private const val KEY_OPEN_WINDOW = "open_window_id"
         private const val KEY_EXPERIMENT_START = "experiment_start_ms"

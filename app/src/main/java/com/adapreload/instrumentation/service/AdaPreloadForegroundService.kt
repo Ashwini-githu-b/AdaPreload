@@ -22,9 +22,9 @@ import com.adapreload.instrumentation.collect.TraceRuntime
 /**
  * Long-running foreground service that hosts AdaPreload's on-device work.
  *
- * Phase B: while running, it observes this device's app launches through UsageEvents and
- * records the launch trace ([TraceRuntime]). It makes no predictions and launches or warms no
- * other app.
+ * While running, it observes this device's app launches through UsageEvents, records the
+ * launch trace and updates the on-device Layer 2 adapter ([TraceRuntime]). Predictions are only
+ * recorded (shadow mode): it launches or warms no other app.
  */
 class AdaPreloadForegroundService : Service() {
 
