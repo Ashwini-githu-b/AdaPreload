@@ -58,14 +58,19 @@ class MemPressureActivity : Activity() {
         // Allocate off the main thread so the activity stays responsive (no ANR) during a large fill.
         Thread {
             val rnd = Random(42)
+            // The ONLY Java-heap buffer: a single reusable 1 MB array, refreshed and copied
+            // repeatedly into each direct chunk. No chunk-sized ByteArray is ever allocated, so
+            // the ART heap growth limit is never approached (that was the earlier false OOM).
+            val fill = ByteArray(FILL_BYTES)
             var done = 0
             try {
                 while (done < requested) {
                     if (releasing) break
-                    val buf = ByteBuffer.allocateDirect(CHUNK_BYTES)
-                    val bytes = ByteArray(CHUNK_BYTES)
-                    rnd.nextBytes(bytes)   // random => incompressible, defeats zram
-                    buf.put(bytes)         // touch every page => resident
+                    val buf = ByteBuffer.allocateDirect(CHUNK_BYTES) // native, off the Java heap
+                    repeat(CHUNK_BYTES / FILL_BYTES) {
+                        rnd.nextBytes(fill)  // refresh => incompressible per page, defeats zram; no new heap
+                        buf.put(fill)        // copy into native memory => every page written/resident
+                    }
                     synchronized(held) { held.add(buf) }
                     done += CHUNK_MB
                 }
@@ -93,8 +98,10 @@ class MemPressureActivity : Activity() {
 
     companion object {
         const val ACTION_MEM_RELEASE = "com.adapreload.instrumentation.PREWARM_MEM_RELEASE"
-        private const val CHUNK_MB = 64
+        private const val CHUNK_MB = 16                        // small direct chunks: robust allocation
         private const val CHUNK_BYTES = CHUNK_MB * 1024 * 1024
+        private const val FILL_MB = 1                          // single reusable heap fill buffer
+        private const val FILL_BYTES = FILL_MB * 1024 * 1024
         private const val MAX_MB = 8192 // hard ceiling; calibration stays well under device RAM
     }
 }
