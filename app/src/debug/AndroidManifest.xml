@@ -16,17 +16,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Debug-only memory-pressure generator for the E2b robustness experiment. Runs in a
-             separate ":stress" process so releasing it never disturbs the main process that holds
-             the Brave binding. Start it with "am start" (int extra "mb"); release it with
-             "am broadcast" of PREWARM_MEM_RELEASE. See MemPressureActivity for the exact commands. -->
-        <activity
-            android:name="com.adapreload.instrumentation.prewarm.MemPressureActivity"
-            android:exported="true"
-            android:process=":stress"
-            android:excludeFromRecents="true"
-            android:label="AdaPreload Mem Pressure" />
-
         <!-- Debug-only adb trigger so bind/unbind can be scripted with an exact, repeatable delay.
              Target it explicitly (am broadcast -n .../.prewarm.PrewarmLabReceiver). Brave-only. -->
         <receiver
