@@ -38,6 +38,19 @@
                 <action android:name="com.adapreload.instrumentation.PREWARM_UNBIND" />
             </intent-filter>
         </receiver>
+
+        <!-- Debug-only adb trigger that exports the on-device dry-run evaluation (the recorded
+             layer2_log + shadow_decisions joined to the canonical sequence). Strictly read-only:
+             no model run, no Layer 2 update, no binding. Target it explicitly
+             (am broadcast -n .../.eval.DryRunReceiver). -->
+        <receiver
+            android:name="com.adapreload.instrumentation.eval.DryRunReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="com.adapreload.instrumentation.DRYRUN_EXPORT" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
