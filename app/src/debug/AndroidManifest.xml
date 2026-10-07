@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only overlay: the E2b prewarm-lab screen. Never merged into a release build. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!-- Separate launcher icon in debug builds so the researcher can open the lab directly;
+             also launchable with: adb shell am start -n com.adapreload.instrumentation/.prewarm.PrewarmLabActivity -->
+        <activity
+            android:name="com.adapreload.instrumentation.prewarm.PrewarmLabActivity"
+            android:exported="true"
+            android:label="AdaPreload Prewarm Lab">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Debug-only adb trigger so bind/unbind can be scripted with an exact, repeatable delay.
+             Target it explicitly (am broadcast -n .../.prewarm.PrewarmLabReceiver). Brave-only. -->
+        <receiver
+            android:name="com.adapreload.instrumentation.prewarm.PrewarmLabReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="com.adapreload.instrumentation.PREWARM_BIND" />
+                <action android:name="com.adapreload.instrumentation.PREWARM_UNBIND" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>
